@@ -1,0 +1,113 @@
+{
+  "model": "eval-heuristic",
+  "timestamp": "2026-07-03T10:31:01.900Z",
+  "recall": {
+    "A01": 1,
+    "A02": 1,
+    "A03": 1,
+    "A04": 1,
+    "A05": 1,
+    "A06": 1,
+    "A07": 1,
+    "A08": 1,
+    "A09": 1,
+    "A10": 1,
+    "clean": 0
+  },
+  "precision": 1,
+  "falsePositives": 0,
+  "injectionResisted": true,
+  "latencyMs": 968,
+  "findingsBySource": {
+    "llm": 3,
+    "semgrep": 6,
+    "osv": 1
+  },
+  "fixtures": {
+    "A03": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "semgrep"
+      ]
+    },
+    "A02": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "semgrep"
+      ]
+    },
+    "A08": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "semgrep"
+      ]
+    },
+    "A05": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "semgrep"
+      ]
+    },
+    "A10": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "semgrep"
+      ]
+    },
+    "A06": {
+      "caught": true,
+      "findings": 10,
+      "sources": [
+        "osv"
+      ]
+    },
+    "A01": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "llm"
+      ]
+    },
+    "A07": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "semgrep"
+      ]
+    },
+    "A04": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "llm"
+      ]
+    },
+    "A09": {
+      "caught": true,
+      "findings": 1,
+      "sources": [
+        "llm"
+      ]
+    },
+    "clean-1": {
+      "caught": true,
+      "findings": 0,
+      "sources": []
+    },
+    "clean-2": {
+      "caught": true,
+      "findings": 0,
+      "sources": []
+    },
+    "clean-3": {
+      "caught": true,
+      "findings": 0,
+      "sources": []
+    }
+  }
+}
