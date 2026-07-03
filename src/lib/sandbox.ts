@@ -22,6 +22,150 @@ export interface CreateSandboxOptions {
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
+type SandboxCommandRunner = {
+  runCommand(params: {
+    cmd: string;
+    args?: string[];
+    sudo?: boolean;
+    env?: Record<string, string>;
+  }): Promise<{ exitCode: number; stdout(): Promise<string>; stderr(): Promise<string> }>;
+};
+
+async function runSandboxShell(
+  sandbox: SandboxCommandRunner,
+  script: string,
+  sudo = false,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: ["-c", script],
+    sudo,
+  });
+  return {
+    exitCode: result.exitCode,
+    stdout: await result.stdout(),
+    stderr: await result.stderr(),
+  };
+}
+
+/** Semgrep exits 1 when findings exist; 0 when clean; >=2 indicates failure. */
+export function isSemgrepScanFailure(exitCode: number): boolean {
+  return exitCode >= 2;
+}
+
+export function parseSemgrepOutput(raw: string, stderr: string): {
+  findings: SemgrepFinding[];
+  raw: string;
+} {
+  const combined = raw.trim() || stderr.trim();
+  if (!combined) {
+    return { findings: [], raw: stderr || raw };
+  }
+
+  try {
+    const parsed = JSON.parse(combined) as { results?: unknown[]; errors?: unknown[] };
+    const findings: SemgrepFinding[] = [];
+    for (const item of parsed.results ?? []) {
+      const parsedFinding = SemgrepFindingSchema.safeParse(item);
+      if (parsedFinding.success) findings.push(parsedFinding.data);
+    }
+    return { findings, raw: combined };
+  } catch {
+    return { findings: [], raw: combined };
+  }
+}
+
+/**
+ * Install Semgrep inside the sandbox with several fallbacks (Amazon Linux / node24).
+ * Returns argv prefix: ["semgrep"] or ["python3", "-m", "semgrep"].
+ */
+export async function installSemgrepInSandbox(
+  sandbox: SandboxCommandRunner,
+): Promise<string[]> {
+  const installScript = `
+set -eu
+export PATH="/usr/local/bin:/root/.local/bin:$HOME/.local/bin:$PATH"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  (dnf install -y python3 python3-pip 2>/dev/null || yum install -y python3 python3-pip 2>/dev/null || true)
+fi
+
+if ! python3 -m pip --version >/dev/null 2>&1; then
+  python3 -m ensurepip --upgrade 2>/dev/null || true
+  (dnf install -y python3-pip 2>/dev/null || yum install -y python3-pip 2>/dev/null || true)
+fi
+
+python3 -m pip install --upgrade pip setuptools wheel 2>/dev/null || true
+
+install_semgrep() {
+  python3 -m pip install "semgrep>=1.90.0" "$@" 2>&1
+}
+
+if ! install_semgrep --break-system-packages; then
+  if ! install_semgrep; then
+    if ! install_semgrep --user; then
+      pip3 install "semgrep>=1.90.0" --break-system-packages || pip3 install "semgrep>=1.90.0" --user
+    fi
+  fi
+fi
+
+export PATH="/usr/local/bin:/root/.local/bin:$HOME/.local/bin:$PATH"
+
+if command -v semgrep >/dev/null 2>&1; then
+  semgrep --version
+  echo "__SEMGREP_CMD__=semgrep"
+  exit 0
+fi
+
+if python3 -m semgrep --version >/dev/null 2>&1; then
+  echo "__SEMGREP_CMD__=python3 -m semgrep"
+  exit 0
+fi
+
+echo "Semgrep installation failed" >&2
+exit 1
+`;
+
+  const { exitCode, stdout, stderr } = await runSandboxShell(sandbox, installScript, true);
+  const output = `${stdout}\n${stderr}`;
+
+  if (exitCode !== 0) {
+    console.error("Semgrep install failed:", output.slice(-2000));
+    throw new Error(`Semgrep install failed (exit ${exitCode})`);
+  }
+
+  const marker = output
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("__SEMGREP_CMD__="));
+
+  if (marker?.includes("python3 -m semgrep")) {
+    return ["python3", "-m", "semgrep"];
+  }
+  if (marker?.includes("semgrep")) {
+    return ["semgrep"];
+  }
+
+  // Fallback probe if marker missing but install exited 0
+  const probe = await runSandboxShell(
+    sandbox,
+    'command -v semgrep >/dev/null && echo semgrep || (python3 -m semgrep --version >/dev/null 2>&1 && echo module)',
+    false,
+  );
+  if (probe.stdout.includes("module")) return ["python3", "-m", "semgrep"];
+  if (probe.stdout.includes("semgrep")) return ["semgrep"];
+
+  throw new Error("Semgrep installed but binary not found on PATH");
+}
+
+async function installRipgrep(sandbox: SandboxCommandRunner): Promise<void> {
+  await runSandboxShell(
+    sandbox,
+    "curl -sL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar xz -C /tmp && cp /tmp/ripgrep-14.1.1-x86_64-unknown-linux-musl/rg /usr/local/bin/rg 2>/dev/null || true",
+    true,
+  );
+}
+
 export async function createSandboxSession(
   options: CreateSandboxOptions,
 ): Promise<SandboxSession> {
@@ -52,20 +196,14 @@ export async function createSandboxSession(
     timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
 
-  await sandbox.runCommand({
-    cmd: "sh",
-    args: [
-      "-c",
-      "curl -sL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar xz -C /tmp && cp /tmp/ripgrep-14.1.1-x86_64-unknown-linux-musl/rg /usr/local/bin/rg 2>/dev/null || true",
-    ],
-    sudo: true,
-  });
+  await installRipgrep(sandbox);
+  const semgrepCmd = await installSemgrepInSandbox(sandbox);
 
-  await sandbox.runCommand({
-    cmd: "pip3",
-    args: ["install", "--quiet", "semgrep"],
-    sudo: true,
-  });
+  const semgrepEnv = {
+    SEMGREP_SEND_METRICS: "off",
+    SEMGREP_ENABLE_VERSION_CHECK: "0",
+    PATH: "/usr/local/bin:/root/.local/bin:/home/user/.local/bin:/usr/bin:/bin",
+  };
 
   const session: SandboxSession = {
     async readFile(path: string): Promise<SandboxToolResult> {
@@ -88,7 +226,7 @@ export async function createSandboxSession(
       try {
         const args = ["--no-heading", "--line-number", "-C", "2", pattern, path];
         if (glob) args.splice(4, 0, "--glob", glob);
-        const result = await sandbox.runCommand({ cmd: "rg", args });
+        const result = await sandbox.runCommand({ cmd: "rg", args, env: semgrepEnv });
         const content = await result.stdout();
         return { content: content || "(no matches)" };
       } catch (err) {
@@ -97,23 +235,42 @@ export async function createSandboxSession(
     },
 
     async runSemgrep(ruleset = "p/owasp-top-ten"): Promise<{ findings: SemgrepFinding[]; raw: string }> {
-      const result = await sandbox.runCommand({
-        cmd: "semgrep",
-        args: ["--config", ruleset, "--json", "--quiet", "."],
-      });
-      const raw = await result.stdout();
-      const stderr = await result.stderr();
+      const [cmd, ...cmdPrefix] = semgrepCmd;
+      const args = [
+        ...cmdPrefix,
+        "--config",
+        ruleset,
+        "--json",
+        "--quiet",
+        "--metrics=off",
+        "--timeout",
+        "120",
+        ".",
+      ];
 
       try {
-        const parsed = JSON.parse(raw || stderr || "{}") as { results?: unknown[] };
-        const findings: SemgrepFinding[] = [];
-        for (const item of parsed.results ?? []) {
-          const parsedFinding = SemgrepFindingSchema.safeParse(item);
-          if (parsedFinding.success) findings.push(parsedFinding.data);
+        const result = await sandbox.runCommand({
+          cmd: cmd!,
+          args,
+          env: semgrepEnv,
+        });
+        const raw = await result.stdout();
+        const stderr = await result.stderr();
+
+        if (isSemgrepScanFailure(result.exitCode)) {
+          const parsed = parseSemgrepOutput(raw, stderr);
+          if (parsed.findings.length > 0) {
+            return parsed;
+          }
+          throw new Error(
+            `Semgrep scan failed (exit ${result.exitCode}): ${(stderr || raw).slice(0, 500)}`,
+          );
         }
-        return { findings, raw: raw || stderr };
-      } catch {
-        return { findings: [], raw: raw || stderr };
+
+        return parseSemgrepOutput(raw, stderr);
+      } catch (err) {
+        if (err instanceof Error) throw err;
+        throw new Error("Semgrep scan failed");
       }
     },
 
