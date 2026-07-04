@@ -50,6 +50,8 @@ export const ReviewResultSchema = z.object({
       toolsUsed: z.array(z.string()).optional(),
       stepCount: z.number().optional(),
       semgrepEnabled: z.boolean().optional(),
+      autofixCommitSha: z.string().optional(),
+      autofixPackages: z.array(z.string()).optional(),
     })
     .optional(),
 });
@@ -77,6 +79,7 @@ export interface PullRequestContext {
   repo: string;
   pullNumber: number;
   headSha: string;
+  headRef: string;
   baseSha: string;
   installationId: number;
   deliveryId: string;

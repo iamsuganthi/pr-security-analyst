@@ -204,6 +204,71 @@ export async function postPullRequestReview(
   });
 }
 
+export async function commitFilesToBranch(
+  octokit: Octokit,
+  params: {
+    owner: string;
+    repo: string;
+    branch: string;
+    message: string;
+    files: Array<{ path: string; content: string }>;
+  },
+): Promise<{ commitSha: string }> {
+  const { data: ref } = await octokit.git.getRef({
+    owner: params.owner,
+    repo: params.repo,
+    ref: `heads/${params.branch}`,
+  });
+
+  const parentSha = ref.object.sha;
+  const { data: parentCommit } = await octokit.git.getCommit({
+    owner: params.owner,
+    repo: params.repo,
+    commit_sha: parentSha,
+  });
+
+  const blobs = await Promise.all(
+    params.files.map(async (file) => {
+      const { data } = await octokit.git.createBlob({
+        owner: params.owner,
+        repo: params.repo,
+        content: Buffer.from(file.content, "utf-8").toString("base64"),
+        encoding: "base64",
+      });
+      return { path: file.path, sha: data.sha };
+    }),
+  );
+
+  const { data: tree } = await octokit.git.createTree({
+    owner: params.owner,
+    repo: params.repo,
+    base_tree: parentCommit.tree.sha,
+    tree: blobs.map((blob) => ({
+      path: blob.path,
+      mode: "100644" as const,
+      type: "blob" as const,
+      sha: blob.sha,
+    })),
+  });
+
+  const { data: commit } = await octokit.git.createCommit({
+    owner: params.owner,
+    repo: params.repo,
+    message: params.message,
+    tree: tree.sha,
+    parents: [parentSha],
+  });
+
+  await octokit.git.updateRef({
+    owner: params.owner,
+    repo: params.repo,
+    ref: `heads/${params.branch}`,
+    sha: commit.sha,
+  });
+
+  return { commitSha: commit.sha };
+}
+
 export function formatFindingComment(finding: {
   severity: string;
   owaspCategory: string;

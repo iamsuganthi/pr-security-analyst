@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     repo,
     pullNumber,
     headSha,
+    headRef: prPayload.pull_request.head.ref,
     baseSha,
     installationId,
     deliveryId,

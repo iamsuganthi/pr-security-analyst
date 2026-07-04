@@ -6,6 +6,12 @@ import {
   runSecurityReview,
 } from "./agent";
 import {
+  applyDependencyAutofixInSandbox,
+  formatAutofixCommitMessage,
+  isDependencyAutofixEnabled,
+} from "./dependency-autofix";
+import {
+  commitFilesToBranch,
   createCheckRun,
   fetchPullRequestDiff,
   fetchPullRequestFiles,
@@ -14,7 +20,7 @@ import {
   updateCheckRun,
 } from "./github";
 import { withSandbox } from "./sandbox";
-import { PullRequestContext } from "./types";
+import { PullRequestContext, ReviewResult } from "./types";
 
 export async function runPullRequestReview(
   octokit: Octokit,
@@ -53,6 +59,10 @@ export async function runPullRequestReview(
       `https://x-access-token:${tokenData.token}@`,
     );
 
+    let reviewHeadSha = ctx.headSha;
+    let autofixNote = "";
+    const degradedLayers: string[] = [];
+
     const { result: review, degraded } = await withSandbox(
       {
         cloneUrl,
@@ -60,38 +70,81 @@ export async function runPullRequestReview(
         username: "x-access-token",
         password: tokenData.token,
       },
-      async (sandbox) =>
-        runSecurityReview({
+      async (sandbox) => {
+        const reviewResult = await runSecurityReview({
           diff,
           files,
           sandbox,
           signal,
-        }),
+        });
+
+        if (!isDependencyAutofixEnabled()) {
+          return reviewResult;
+        }
+
+        const autofix = await applyDependencyAutofixInSandbox(sandbox, reviewResult.findings);
+        if (!autofix.applied) {
+          if (autofix.error && autofix.packages.length > 0) {
+            degradedLayers.push("autofix");
+            autofixNote = `\n\n> Dependency autofix skipped: ${autofix.error}`;
+          }
+          return reviewResult;
+        }
+
+        try {
+          const { commitSha } = await commitFilesToBranch(octokit, {
+            owner: ctx.owner,
+            repo: ctx.repo,
+            branch: ctx.headRef,
+            message: formatAutofixCommitMessage(autofix.packages),
+            files: autofix.files,
+          });
+
+          reviewHeadSha = commitSha;
+          autofixNote = `\n\n### Dependency autofix\n\nSecureReview committed patched versions to this branch (\`${commitSha.slice(0, 7)}\`):\n${autofix.packages
+            .map((u) => `- \`${u.name}\`: ${u.fromVersion ?? "?"} → \`${u.toVersion}\``)
+            .join("\n")}`;
+
+          return {
+            ...reviewResult,
+            metadata: {
+              ...reviewResult.metadata,
+              autofixCommitSha: commitSha,
+              autofixPackages: autofix.packages.map((u) => u.name),
+            },
+          } satisfies ReviewResult;
+        } catch (err) {
+          degradedLayers.push("autofix");
+          const message = err instanceof Error ? err.message : "commit failed";
+          autofixNote = `\n\n> Dependency autofix failed: ${message}`;
+          return reviewResult;
+        }
+      },
     );
 
-    const degradedLayers = [...review.degradedLayers];
+    degradedLayers.push(...review.degradedLayers);
     if (degraded) degradedLayers.push("sandbox");
 
     const reviewResult = { ...review, degradedLayers };
     const inlineComments = mapFindingsToReviewComments(reviewResult.findings, files);
 
-    const summaryBody = buildSummaryComment(reviewResult);
+    let summaryBody = buildSummaryComment(reviewResult);
+    if (autofixNote) summaryBody += autofixNote;
+
     const event = hasCriticalFindings(reviewResult.findings) ? "REQUEST_CHANGES" : "COMMENT";
 
     await postPullRequestReview(octokit, {
       owner: ctx.owner,
       repo: ctx.repo,
       pullNumber: ctx.pullNumber,
-      commitId: ctx.headSha,
+      commitId: reviewHeadSha,
       body: summaryBody,
       comments: inlineComments,
       event,
     });
 
     const conclusion = hasCriticalFindings(reviewResult.findings) ? "failure" : "success";
-    const detailLines = reviewResult.findings.map((f) =>
-      formatFindingComment(f),
-    );
+    const detailLines = reviewResult.findings.map((f) => formatFindingComment(f));
 
     await updateCheckRun(octokit, {
       owner: ctx.owner,

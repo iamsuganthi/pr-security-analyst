@@ -8,6 +8,7 @@ export interface SandboxToolResult {
 export interface SandboxSession {
   readFile(path: string): Promise<SandboxToolResult>;
   grep(pattern: string, path?: string, glob?: string): Promise<SandboxToolResult>;
+  runShell(script: string): Promise<{ exitCode: number; stdout: string; stderr: string }>;
   runSemgrep(ruleset?: string): Promise<{ findings: SemgrepFinding[]; raw: string }>;
   destroy(): Promise<void>;
 }
@@ -462,6 +463,10 @@ export async function createSandboxSession(
       }
     },
 
+    async runShell(script: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+      return runSandboxShell(sandbox, script, false);
+    },
+
     async runSemgrep(ruleset = "p/owasp-top-ten"): Promise<{ findings: SemgrepFinding[]; raw: string }> {
       if (!semgrepCmd) {
         throw new Error("Semgrep not installed in sandbox");
@@ -520,6 +525,9 @@ function createLocalFallbackSession(): SandboxSession {
     },
     async grep() {
       return { content: "", error: "Sandbox unavailable — diff-only mode" };
+    },
+    async runShell() {
+      return { exitCode: 1, stdout: "", stderr: "Sandbox unavailable" };
     },
     async runSemgrep() {
       return { findings: [], raw: "Sandbox unavailable" };

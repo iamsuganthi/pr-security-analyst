@@ -22,6 +22,9 @@ export function createMockSandbox(diff: string): SandboxSession {
     async runSemgrep() {
       return { findings: mockSemgrepFindings(diff), raw: "" };
     },
+    async runShell() {
+      return { exitCode: 1, stdout: "", stderr: "mock sandbox" };
+    },
     async destroy() {},
   };
 }
