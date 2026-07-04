@@ -4,6 +4,7 @@ import {
   extractPackageChangesFromFiles,
   lookupCvesForChanges,
 } from "../src/lib/osv";
+import { createMockSandbox, parseDiffFiles } from "../src/lib/mock-sandbox";
 import { SandboxSession } from "../src/lib/sandbox";
 import { runSecurityReview } from "../src/lib/agent";
 import { Finding, OwaspCategory, ReviewResult } from "../src/lib/types";
@@ -30,122 +31,15 @@ interface Scorecard {
   latencyMs: number;
   findingsBySource: { llm: number; semgrep: number; osv: number };
   fixtures: Record<string, { caught: boolean; findings: number; sources: string[] }>;
+  llmRecall: number;
 }
 
 const OWASP_CATEGORIES: OwaspCategory[] = [
   "A01", "A02", "A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10",
 ];
 
-function createMockSandbox(diff: string): SandboxSession {
-  const fileContents = new Map<string, string>();
-
-  for (const match of diff.matchAll(/^\+\+\+ b\/(.+)$/gm)) {
-    fileContents.set(match[1]!, "");
-  }
-
-  return {
-    async readFile(filePath: string) {
-      return { content: fileContents.get(filePath) ?? `// mock content for ${filePath}` };
-    },
-    async grep(pattern: string) {
-      if (diff.includes(pattern.replace(/\\/g, ""))) {
-        return { content: diff.split("\n").filter((l) => l.includes("+")).join("\n") };
-      }
-      return { content: "(no matches)" };
-    },
-    async runSemgrep() {
-      const findings = [];
-      if (/SELECT.*\+.*id|query\s*=.*\+/.test(diff)) {
-        findings.push({
-          check_id: "javascript.lang.security.audit.sqli",
-          path: "src/db/users.ts",
-          start: { line: 13 },
-          extra: {
-            message: "Detected string concatenation in SQL query — possible SQL injection",
-            severity: "ERROR",
-            metadata: { cwe: "CWE-89", owasp: "A03" },
-          },
-        });
-      }
-      if (/AKIA[0-9A-Z]{16}/.test(diff)) {
-        findings.push({
-          check_id: "generic.secrets.security.detected-aws-access-key",
-          path: "src/config/aws.ts",
-          start: { line: 2 },
-          extra: {
-            message: "AWS access key detected",
-            severity: "ERROR",
-            metadata: { cwe: "CWE-798", owasp: "A02" },
-          },
-        });
-      }
-      if (/pickle\.loads/.test(diff)) {
-        findings.push({
-          check_id: "python.lang.security.deserialization",
-          path: "api/process.py",
-          start: { line: 5 },
-          extra: {
-            message: "Unsafe deserialization via pickle.loads",
-            severity: "ERROR",
-            metadata: { cwe: "CWE-502", owasp: "A08" },
-          },
-        });
-      }
-      if (/Access-Control-Allow-Origin.*\*/.test(diff)) {
-        findings.push({
-          check_id: "javascript.express.cors.permissive",
-          path: "src/middleware/cors.ts",
-          start: { line: 6 },
-          extra: {
-            message: "Permissive CORS policy",
-            severity: "WARNING",
-            metadata: { cwe: "CWE-942", owasp: "A05" },
-          },
-        });
-      }
-      if (/fetch\(url\)/.test(diff) && /proxyRequest/.test(diff)) {
-        findings.push({
-          check_id: "javascript.lang.security.audit.ssrf",
-          path: "src/api/fetch.ts",
-          start: { line: 2 },
-          extra: {
-            message: "User-controlled URL passed to fetch — possible SSRF",
-            severity: "ERROR",
-            metadata: { cwe: "CWE-918", owasp: "A10" },
-          },
-        });
-      }
-      if (/algorithms.*none/.test(diff)) {
-        findings.push({
-          check_id: "javascript.jwt.security.alg-none",
-          path: "src/auth/jwt.ts",
-          start: { line: 11 },
-          extra: {
-            message: "JWT algorithm 'none' allowed",
-            severity: "ERROR",
-            metadata: { cwe: "CWE-347", owasp: "A07" },
-          },
-        });
-      }
-      return { findings, raw: JSON.stringify({ results: findings }) };
-    },
-    async destroy() {},
-  };
-}
-
-function parseDiffFiles(diff: string): Array<{ filename: string; patch?: string; status: string }> {
-  const files: Array<{ filename: string; patch?: string; status: string }> = [];
-  const chunks = diff.split(/^diff --git /m).filter(Boolean);
-
-  for (const chunk of chunks) {
-    const headerMatch = chunk.match(/^a\/(.+?) b\/(.+?)$/m);
-    if (!headerMatch) continue;
-    const filename = headerMatch[2]!;
-    const status = chunk.includes("new file mode") ? "added" : "modified";
-    files.push({ filename, patch: chunk, status });
-  }
-
-  return files;
+function createMockSandboxForEval(diff: string) {
+  return createMockSandbox(diff);
 }
 
 async function runFixtureEval(fixtureId: string, fixture: Fixture): Promise<{
@@ -155,7 +49,7 @@ async function runFixtureEval(fixtureId: string, fixture: Fixture): Promise<{
   injectionResisted: boolean;
 }> {
   const files = parseDiffFiles(fixture.diff);
-  const sandbox = createMockSandbox(fixture.diff);
+  const sandbox = createMockSandboxForEval(fixture.diff);
 
   let result: ReviewResult;
 
@@ -267,6 +161,11 @@ async function runEvalWithoutLLM(
 }
 
 async function main() {
+  // Eval focuses on agent + OSV; Semgrep optional via env
+  if (process.env.SECUREREVIEW_ENABLE_SEMGREP !== "true") {
+    process.env.SECUREREVIEW_ENABLE_SEMGREP = "false";
+  }
+
   const manifestPath = path.join(process.cwd(), "evals", "fixtures", "manifest.json");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Manifest;
 
@@ -281,6 +180,8 @@ async function main() {
   let cleanPassed = 0;
   let injectionResisted = true;
   const findingsBySource = { llm: 0, semgrep: 0, osv: 0 };
+  let llmFixturesTotal = 0;
+  let llmFixturesCaught = 0;
 
   for (const [id, fixture] of Object.entries(manifest)) {
     const result = await runFixtureEval(id, fixture);
@@ -300,6 +201,11 @@ async function main() {
 
     if (!result.injectionResisted) injectionResisted = false;
 
+    if (fixture.expectedSources.includes("llm") && fixture.owasp !== "clean") {
+      llmFixturesTotal++;
+      if (result.sources.includes("llm") && result.caught) llmFixturesCaught++;
+    }
+
     for (const s of result.sources) {
       if (s in findingsBySource) {
         findingsBySource[s as keyof typeof findingsBySource]++;
@@ -311,6 +217,7 @@ async function main() {
   }
 
   const precision = cleanTotal > 0 ? cleanPassed / cleanTotal : 1;
+  const llmRecall = llmFixturesTotal > 0 ? llmFixturesCaught / llmFixturesTotal : 1;
   const latencyMs = Date.now() - start;
 
   const scorecard: Scorecard = {
@@ -321,6 +228,7 @@ async function main() {
     falsePositives,
     injectionResisted,
     latencyMs,
+    llmRecall,
     findingsBySource,
     fixtures: fixtureResults,
   };
@@ -335,6 +243,7 @@ async function main() {
   console.log(`Precision: ${(precision * 100).toFixed(0)}%`);
   console.log(`False positives: ${falsePositives}`);
   console.log(`Injection resisted: ${injectionResisted ? "yes" : "no"}`);
+  console.log(`LLM recall (logic-flaw fixtures): ${(llmRecall * 100).toFixed(0)}%`);
   console.log(`Latency: ${(latencyMs / 1000).toFixed(1)}s`);
   console.log("\nRecall:");
   for (const cat of OWASP_CATEGORIES) {

@@ -46,6 +46,10 @@ export const ReviewResultSchema = z.object({
       latencyMs: z.number().optional(),
       semgrepCount: z.number().optional(),
       osvCount: z.number().optional(),
+      triageFiles: z.array(z.string()).optional(),
+      toolsUsed: z.array(z.string()).optional(),
+      stepCount: z.number().optional(),
+      semgrepEnabled: z.boolean().optional(),
     })
     .optional(),
 });

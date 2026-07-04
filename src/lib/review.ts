@@ -28,7 +28,7 @@ export async function runPullRequestReview(
     status: "in_progress",
     output: {
       title: "SecureReview in progress",
-      summary: "Running Semgrep, OSV CVE lookup, and AI security review…",
+      summary: "Running AI security review (triage → OSV → agent tools)…",
     },
     externalId: ctx.deliveryId,
   });

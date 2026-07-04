@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "eval": "tsx evals/run.ts"
+    "eval": "tsx evals/run.ts",
+    "demo": "tsx scripts/demo-agent.ts",
+    "sandbox:test": "tsx scripts/test-sandbox.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.7",

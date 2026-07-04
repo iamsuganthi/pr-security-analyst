@@ -10,7 +10,7 @@ interface EvalScorecard {
   falsePositives: number;
   injectionResisted: boolean;
   latencyMs: number;
-  costEstimateUsd?: number;
+  llmRecall?: number;
   findingsBySource: { llm: number; semgrep: number; osv: number };
 }
 
@@ -20,7 +20,7 @@ function loadLatestScorecard(): EvalScorecard | null {
 
   const files = fs
     .readdirSync(resultsDir)
-    .filter((f) => f.endsWith(".json"))
+    .filter((f) => f.endsWith(".json") && !f.includes("placeholder"))
     .sort()
     .reverse();
 
@@ -45,29 +45,28 @@ export default function HomePage() {
             SecureReview
           </p>
           <h1 className="mb-4 text-4xl font-bold tracking-tight">
-            PR Security Review Agent
+            Agentic PR Security Review
           </h1>
           <p className="max-w-2xl text-lg text-zinc-400">
-            A GitHub-connected agent that reviews every pull request for OWASP Top 10
-            vulnerabilities. Three signal sources: Semgrep SAST in an isolated Vercel
-            Sandbox, deterministic CVE lookups via OSV.dev, and an AI SDK agent for
-            contextual judgment.
+            A GitHub App that reviews every pull request — posts inline comments and a Check Run.
+            An AI agent investigates the cloned repo with sandbox tools; OSV grounds dependency CVEs.
+            Semgrep is optional; the agent handles logic flaws scanners miss.
           </p>
         </header>
 
         <section className="mb-12 grid gap-4 sm:grid-cols-3">
           {[
             {
-              title: "Semgrep",
-              desc: "Deterministic SAST baseline with p/owasp-top-ten rules inside the Sandbox.",
+              title: "AI Agent",
+              desc: "Multi-step review with readFile, grep, lookupCve, and structured submitFindings.",
             },
             {
               title: "OSV.dev",
-              desc: "Known CVE alerts on dependency bumps — never LLM-hallucinated CVE IDs.",
+              desc: "Known CVE alerts on dependency bumps — CVE IDs validated, never hallucinated.",
             },
             {
-              title: "AI Agent",
-              desc: "Full-repo context via Sandbox tools for auth logic, IDOR, and design flaws.",
+              title: "Fallbacks",
+              desc: "Model routing, diff-only triage, per-layer degradation, and eval regression checks.",
             },
           ].map((item) => (
             <div
@@ -81,22 +80,31 @@ export default function HomePage() {
         </section>
 
         <section className="mb-12 rounded-xl border border-zinc-800 bg-zinc-900/30 p-6">
-          <h2 className="mb-4 text-xl font-semibold">Architecture</h2>
+          <h2 className="mb-4 text-xl font-semibold">Agent workflow</h2>
           <pre className="overflow-x-auto rounded-lg bg-black/40 p-4 text-xs leading-relaxed text-zinc-300">
-{`GitHub App (PR webhook)
+{`GitHub App — pull_request webhook
         │
         ▼
-Next.js route on Vercel
-        │  verify HMAC, dedupe, start run (waitUntil)
-        ▼
-Vercel Sandbox (ephemeral, per run)
-  • clone repo @ PR head
-  • semgrep scan + agent tools
+Clone repo @ PR head (Vercel Sandbox)
         │
         ▼
-AI SDK agent (via AI Gateway)
-  → dedupe/rank findings → GitHub PR review + Check Run`}
+① Triage (cheap model) — pick security-relevant files
+        │
+        ▼
+② OSV — CVE lookup on dependency changes
+        │
+        ▼
+③ Agent (AI SDK + Gateway)
+     sandbox tools: readFile · grep · lookupCve · submitFindings
+        │
+        ▼
+④ GitHub PR review + SecureReview Check Run`}
           </pre>
+          <p className="mt-4 text-sm text-zinc-500">
+            Production: open a PR on a connected repo. Local dev:{" "}
+            <code className="text-emerald-400">npm run demo</code> · Eval:{" "}
+            <code className="text-emerald-400">npm run eval</code>
+          </p>
         </section>
 
         {scorecard ? (
@@ -107,7 +115,10 @@ AI SDK agent (via AI Gateway)
             </p>
             <div className="mb-4 grid gap-3 sm:grid-cols-2">
               <Metric label="Precision (clean PRs)" value={`${(scorecard.precision * 100).toFixed(0)}%`} />
-              <Metric label="False positives" value={String(scorecard.falsePositives)} />
+              <Metric
+                label="LLM recall (logic flaws)"
+                value={`${((scorecard.llmRecall ?? 0) * 100).toFixed(0)}%`}
+              />
               <Metric label="Prompt injection resisted" value={scorecard.injectionResisted ? "Yes" : "No"} />
               <Metric label="Latency" value={`${(scorecard.latencyMs / 1000).toFixed(1)}s`} />
             </div>
@@ -134,7 +145,7 @@ AI SDK agent (via AI Gateway)
         <footer className="mt-16 border-t border-zinc-800 pt-8 text-sm text-zinc-500">
           <p>
             Install the GitHub App and configure{" "}
-            <code className="text-zinc-400">POST /api/webhooks/github</code> to start reviewing PRs.
+            <code className="text-zinc-400">POST /api/webhooks/github</code> to review PRs in production.
           </p>
         </footer>
       </div>

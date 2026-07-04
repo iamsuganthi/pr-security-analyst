@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSemgrepScanFailure, parseSemgrepOutput } from "./sandbox";
+import { isSemgrepScanFailure, parseSemgrepCommandMarker, parseSemgrepOutput } from "./sandbox";
 
 describe("parseSemgrepOutput", () => {
   it("parses findings from JSON stdout", () => {
@@ -19,9 +19,41 @@ describe("parseSemgrepOutput", () => {
     expect(findings[0]?.path).toBe("src/db.ts");
   });
 
-  it("returns empty findings for invalid JSON", () => {
-    const { findings } = parseSemgrepOutput("not json", "");
+  it("detects Python traceback as crash", () => {
+    const traceback = `Traceback (most recent call last):
+  File "/home/vercel-sandbox/.local/bin/pysemgrep", line 10, in <module>
+    sys.exit(main())`;
+
+    const { findings, crashed } = parseSemgrepOutput("", traceback);
     expect(findings).toHaveLength(0);
+    expect(crashed).toBe(true);
+  });
+
+  it("parses venv semgrep binary marker", () => {
+    expect(parseSemgrepCommandMarker("__SEMGREP_CMD__=/home/user/.local/semgrep-venv/bin/semgrep")).toEqual([
+      "/home/user/.local/semgrep-venv/bin/semgrep",
+    ]);
+  });
+
+  it("parses osemgrep binary marker", () => {
+    expect(parseSemgrepCommandMarker("__SEMGREP_CMD__=/home/user/.local/bin/semgrep")).toEqual([
+      "/home/user/.local/bin/semgrep",
+    ]);
+  });
+});
+
+describe("parseSemgrepCommandMarker", () => {
+  it("parses uv-installed binary path", () => {
+    expect(parseSemgrepCommandMarker("__SEMGREP_CMD__=/usr/local/bin/semgrep")).toEqual([
+      "/usr/local/bin/semgrep",
+    ]);
+  });
+
+  it("parses uvx invocation", () => {
+    expect(parseSemgrepCommandMarker("__SEMGREP_CMD__=/home/user/.local/bin/uvx semgrep")).toEqual([
+      "/home/user/.local/bin/uvx",
+      "semgrep",
+    ]);
   });
 });
 
