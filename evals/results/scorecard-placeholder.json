@@ -18,7 +18,6 @@
   "latencyMs": 0,
   "findingsBySource": {
     "llm": 0,
-    "semgrep": 0,
     "osv": 0
   },
   "model": "eval-heuristic",

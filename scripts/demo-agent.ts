@@ -75,7 +75,6 @@ async function runDemo(fixtureId: string, fixture: Fixture): Promise<void> {
   console.log("  Files:", result.metadata?.triageFiles?.join(", ") || "(none)");
 
   console.log("\n── Deterministic layers ──");
-  console.log("  Semgrep:", result.metadata?.semgrepEnabled ? result.metadata.semgrepCount : "disabled");
   console.log("  OSV CVEs:", result.metadata?.osvCount ?? 0);
 
   console.log("\n── Agent loop ──");
@@ -109,15 +108,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Semgrep off — AI story focus
-  process.env.SECUREREVIEW_ENABLE_SEMGREP = "false";
-
   const manifestPath = resolve(process.cwd(), "evals/fixtures/manifest.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<string, Fixture>;
   const { fixtures } = parseArgs();
 
   console.log("SecureReview — Agent Demo (local only; production uses GitHub PRs)");
-  console.log("Semgrep: disabled | Sandbox: mock");
+  console.log("Sandbox: mock");
 
   for (const id of fixtures) {
     const fixture = manifest[id];

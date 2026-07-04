@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   console.log("");
 
   const started = Date.now();
-  console.log("Creating sandbox + installing tools (uv, semgrep, rg)…");
+  console.log("Creating sandbox + installing ripgrep…");
 
   const session = await createSandboxSession({
     cloneUrl: authCloneUrl,
@@ -89,21 +89,6 @@ async function main(): Promise<void> {
     console.log("\n--- grep src/ (Java) ---");
     const grep = await session.grep("password|secret|Runtime\\.getRuntime|exec\\(", "src");
     console.log(grep.content.slice(0, 600) || grep.error || "(no matches)");
-
-    console.log("\n--- semgrep p/owasp-top-ten ---");
-    const semgrepStarted = Date.now();
-    try {
-      const { findings, raw } = await session.runSemgrep();
-      console.log(`Findings: ${findings.length} (${((Date.now() - semgrepStarted) / 1000).toFixed(1)}s)`);
-      for (const f of findings.slice(0, 10)) {
-        console.log(`  • ${f.path}:${f.start.line} — ${f.extra.message}`);
-      }
-      if (findings.length === 0) {
-        console.log("Raw output (first 400 chars):", raw.slice(0, 400));
-      }
-    } catch (err) {
-      console.error("Semgrep not available:", err instanceof Error ? err.message : err);
-    }
 
     console.log("\n✓ Sandbox test complete");
   } catch (err) {

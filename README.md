@@ -2,11 +2,10 @@
 
 PR Security Review Agent — Vercel SA tech assessment (AI Cloud track).
 
-Reviews every pull request for OWASP Top 10 vulnerabilities using three signal sources:
+Reviews every pull request for OWASP Top 10 vulnerabilities using two signal sources:
 
-1. **Semgrep** — deterministic SAST (`p/owasp-top-ten`) inside an ephemeral Vercel Sandbox
-2. **OSV.dev** — known CVE lookups on dependency changes (never LLM-hallucinated CVE IDs)
-3. **AI SDK agent** — contextual judgment via Sandbox-backed tools (`readFile`, `grep`, `runSemgrep`, `lookupCve`)
+1. **OSV.dev** — known CVE lookups on dependency changes (never LLM-hallucinated CVE IDs), with optional auto-commit of safe version bumps
+2. **AI SDK agent** — contextual judgment via Sandbox-backed tools (`readFile`, `grep`, `lookupCve`, `submitFindings`)
 
 Untrusted PR code never touches the app runtime — all repo operations run in an isolated Sandbox per review.
 
@@ -39,7 +38,7 @@ Webhook endpoint: `POST /api/webhooks/github`
 ## GitHub App setup
 
 1. Create a GitHub App with `pull_request` webhook events
-2. Permissions: Pull requests (read & write), Contents (read), Checks (read & write)
+2. Permissions: Pull requests (read & write), Contents (read & write for dependency autofix), Checks (read & write)
 3. Subscribe to: `pull_request` (opened, synchronize, reopened)
 4. Set webhook URL to `https://your-app.vercel.app/api/webhooks/github`
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const SeveritySchema = z.enum(["critical", "high", "medium", "low", "info"]);
 export type Severity = z.infer<typeof SeveritySchema>;
 
-export const FindingSourceSchema = z.enum(["llm", "semgrep", "osv"]);
+export const FindingSourceSchema = z.enum(["llm", "osv"]);
 export type FindingSource = z.infer<typeof FindingSourceSchema>;
 
 export const OwaspCategorySchema = z.enum([
@@ -44,35 +44,16 @@ export const ReviewResultSchema = z.object({
     .object({
       model: z.string().optional(),
       latencyMs: z.number().optional(),
-      semgrepCount: z.number().optional(),
       osvCount: z.number().optional(),
       triageFiles: z.array(z.string()).optional(),
       toolsUsed: z.array(z.string()).optional(),
       stepCount: z.number().optional(),
-      semgrepEnabled: z.boolean().optional(),
       autofixCommitSha: z.string().optional(),
       autofixPackages: z.array(z.string()).optional(),
     })
     .optional(),
 });
 export type ReviewResult = z.infer<typeof ReviewResultSchema>;
-
-export const SemgrepFindingSchema = z.object({
-  check_id: z.string(),
-  path: z.string(),
-  start: z.object({ line: z.number() }),
-  extra: z.object({
-    message: z.string(),
-    severity: z.string().optional(),
-    metadata: z
-      .object({
-        cwe: z.union([z.string(), z.array(z.string())]).optional(),
-        owasp: z.union([z.string(), z.array(z.string())]).optional(),
-      })
-      .optional(),
-  }),
-});
-export type SemgrepFinding = z.infer<typeof SemgrepFindingSchema>;
 
 export interface PullRequestContext {
   owner: string;

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SecureReview — PR Security Review Agent",
   description:
-    "GitHub-connected agent that reviews every PR for OWASP Top 10 vulnerabilities using Semgrep, OSV.dev, and AI.",
+    "GitHub-connected agent that reviews every PR for OWASP Top 10 vulnerabilities using OSV.dev and AI.",
 };
 
 export default function RootLayout({

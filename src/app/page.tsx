@@ -11,7 +11,7 @@ interface EvalScorecard {
   injectionResisted: boolean;
   latencyMs: number;
   llmRecall?: number;
-  findingsBySource: { llm: number; semgrep: number; osv: number };
+  findingsBySource: { llm: number; osv: number };
 }
 
 function loadLatestScorecard(): EvalScorecard | null {
@@ -49,8 +49,8 @@ export default function HomePage() {
           </h1>
           <p className="max-w-2xl text-lg text-zinc-400">
             A GitHub App that reviews every pull request — posts inline comments and a Check Run.
-            An AI agent investigates the cloned repo with sandbox tools; OSV grounds dependency CVEs.
-            Semgrep is optional; the agent handles logic flaws scanners miss.
+            An AI agent investigates the cloned repo with sandbox tools; OSV grounds dependency CVEs
+            and can auto-commit safe version bumps.
           </p>
         </header>
 
