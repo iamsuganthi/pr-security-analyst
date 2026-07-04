@@ -41,3 +41,4 @@ evals/results/*
 !evals/results/scorecard-placeholder.json
 evals/.tmp/
 .vercel
+PLAN.md
