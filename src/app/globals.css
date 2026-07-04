@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0f;
+  --background: #000000;
   --foreground: #ededed;
-  --accent: #22c55e;
-  --muted: #71717a;
-  --card: #14141f;
-  --border: #27272a;
+  --muted: #888888;
+  --accent: #0070f3;
+  --accent-hover: #0060df;
+  --accent-soft: #3291ff;
+  --card: #0a0a0a;
+  --border: #333333;
+  --border-subtle: rgba(255, 255, 255, 0.1);
 }
 
 body {
@@ -14,4 +17,44 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(0, 112, 243, 0.35);
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background: rgba(0, 112, 243, 0.35);
+  color: #ffffff;
+}
+
+.vercel-glow {
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    rgba(0, 112, 243, 0.12),
+    transparent 70%
+  );
+}
+
+.vercel-surface {
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+}
+
+.vercel-surface-accent {
+  border: 1px solid rgba(0, 112, 243, 0.35);
+  background: rgba(0, 112, 243, 0.05);
+}
+
+.vercel-btn {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.vercel-btn:hover {
+  background: #e5e5e5;
 }

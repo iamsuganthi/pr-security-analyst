@@ -3,31 +3,32 @@ const GITHUB_APP_INSTALL_URL =
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen">
-      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
+    <main className="relative min-h-screen">
+      <div aria-hidden className="vercel-glow pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
         <header className="mb-8 sm:mb-10">
-          <p className="mb-2 text-sm font-medium uppercase tracking-widest text-emerald-400">
+          <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
             Secure Review
           </p>
-          <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="mb-4 text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl sm:tracking-[-0.02em]">
             Security review on every pull request
           </h1>
-          <p className="max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
+          <p className="max-w-2xl text-base leading-relaxed text-[var(--muted)] sm:text-[17px] sm:leading-7">
             Fix security vulnerabilities before a pull request is merged. SecureReview gives
             every PR an automated security pass — so teams move fast without shipping blind.
           </p>
         </header>
 
-        <section className="mb-8 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4 sm:mb-10 sm:p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-emerald-300">
-            <GitHubIcon className="h-5 w-5 shrink-0" />
+        <section className="vercel-surface-accent mb-8 rounded-lg p-4 sm:mb-10 sm:p-6">
+          <h2 className="mb-3 flex items-center gap-2 text-base font-medium text-[var(--foreground)]">
+            <GitHubIcon className="h-5 w-5 shrink-0 text-[var(--muted)]" />
             Try it on GitHub
           </h2>
-          <ol className="mb-5 ml-4 list-decimal space-y-3 text-sm leading-relaxed text-zinc-300">
+          <ol className="mb-5 ml-4 list-decimal space-y-3 text-sm leading-relaxed text-[var(--muted)]">
             <li>
               <a
                 href={GITHUB_APP_INSTALL_URL}
-                className="font-medium text-emerald-400 underline-offset-2 hover:underline"
+                className="font-medium text-[var(--accent-soft)] underline-offset-2 transition hover:text-[var(--accent)] hover:underline"
               >
                 Install the GitHub App
               </a>{" "}
@@ -36,21 +37,22 @@ export default function HomePage() {
             <li>Open a PR — expand below if you need inspiration</li>
             <li>
               Watch for a PR review comment, inline notes on changed lines, and a{" "}
-              <strong className="font-medium text-zinc-200">SecureReview</strong> check
+              <strong className="font-medium text-[var(--foreground)]">SecureReview</strong>{" "}
+              check
             </li>
           </ol>
           <a
             href={GITHUB_APP_INSTALL_URL}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 sm:inline-flex sm:w-auto sm:py-2.5"
+            className="vercel-btn flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition sm:inline-flex sm:w-auto"
           >
             <GitHubIcon className="h-4 w-4 shrink-0" />
             Install on GitHub →
           </a>
-          <details className="group mt-5 border-t border-emerald-900/40 pt-4">
-            <summary className="cursor-pointer list-none py-1 text-sm text-zinc-400 transition hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
+          <details className="group mt-5 border-t border-[var(--border-subtle)] pt-4">
+            <summary className="cursor-pointer list-none py-1 text-sm text-[var(--muted)] transition hover:text-[var(--foreground)] [&::-webkit-details-marker]:hidden">
               <span className="inline-flex min-h-11 items-center gap-2">
                 <span
-                  className="text-emerald-400/70 transition group-open:rotate-90"
+                  className="text-[var(--accent-soft)] transition group-open:rotate-90"
                   aria-hidden="true"
                 >
                   ›
@@ -58,23 +60,32 @@ export default function HomePage() {
                 Need inspiration for a test PR?
               </span>
             </summary>
-            <ul className="mt-2 space-y-3 break-words border-l border-zinc-800 pl-4 text-sm leading-relaxed text-zinc-400">
+            <ul className="mt-2 space-y-3 break-words border-l border-[var(--border-subtle)] pl-4 text-sm leading-relaxed text-[var(--muted)]">
               <li>
-                Add <code className="break-all text-emerald-400">lodash@4.17.4</code> to{" "}
-                <code className="break-all text-zinc-300">package.json</code> — CVE alerts and
-                often an autofix commit
+                Add{" "}
+                <code className="break-all rounded border border-[var(--border-subtle)] bg-[#111] px-1 py-0.5 text-[var(--accent-soft)]">
+                  lodash@4.17.4
+                </code>{" "}
+                to{" "}
+                <code className="break-all rounded border border-[var(--border-subtle)] bg-[#111] px-1 py-0.5 text-[var(--foreground)]">
+                  package.json
+                </code>{" "}
+                — CVE alerts and often an autofix commit
               </li>
               <li>A delete route with no auth check — flags missing authorization</li>
               <li>
-                Server-side <code className="break-all text-zinc-300">fetch(userUrl)</code> —
-                flags SSRF risk
+                Server-side{" "}
+                <code className="break-all rounded border border-[var(--border-subtle)] bg-[#111] px-1 py-0.5 text-[var(--foreground)]">
+                  fetch(userUrl)
+                </code>{" "}
+                — flags SSRF risk
               </li>
               <li>SQL built from user input — flags injection risk</li>
             </ul>
           </details>
         </section>
 
-        <section className="mb-8 grid gap-4 sm:mb-10 sm:grid-cols-3">
+        <section className="mb-8 grid gap-3 sm:mb-10 sm:grid-cols-3 sm:gap-4">
           {[
             {
               title: "Agent for judgment",
@@ -89,21 +100,18 @@ export default function HomePage() {
               desc: "If OSV or the model fails, the review says so explicitly instead of silently passing.",
             },
           ].map((item) => (
-            <div
-              key={item.title}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 sm:p-5"
-            >
-              <h3 className="mb-2 font-semibold text-emerald-400">{item.title}</h3>
-              <p className="text-sm leading-relaxed text-zinc-400">{item.desc}</p>
+            <div key={item.title} className="vercel-surface rounded-lg p-4 sm:p-5">
+              <h3 className="mb-2 text-sm font-medium text-[var(--foreground)]">{item.title}</h3>
+              <p className="text-sm leading-relaxed text-[var(--muted)]">{item.desc}</p>
             </div>
           ))}
         </section>
 
-        <details className="group mb-8 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 sm:mb-10 sm:p-6">
-          <summary className="cursor-pointer list-none py-1 text-base font-semibold text-zinc-200 transition hover:text-white sm:text-lg [&::-webkit-details-marker]:hidden">
+        <details className="group vercel-surface mb-8 rounded-lg p-4 sm:mb-10 sm:p-6">
+          <summary className="cursor-pointer list-none py-1 text-base font-medium text-[var(--foreground)] transition hover:text-white sm:text-[17px] [&::-webkit-details-marker]:hidden">
             <span className="inline-flex min-h-11 items-center gap-2">
               <span
-                className="text-emerald-400/70 transition group-open:rotate-90"
+                className="text-[var(--accent-soft)] transition group-open:rotate-90"
                 aria-hidden="true"
               >
                 ›
@@ -111,11 +119,11 @@ export default function HomePage() {
               How it works
             </span>
           </summary>
-          <p className="mb-4 mt-2 text-sm leading-relaxed text-zinc-400">
-            Each review spins up a fresh sandbox,
-            clones at the PR head, and posts results back to GitHub.
+          <p className="mb-4 mt-2 text-sm leading-relaxed text-[var(--muted)]">
+            Each review spins up a fresh sandbox, clones at the PR head, and posts results back to
+            GitHub.
           </p>
-          <pre className="max-w-full overflow-x-auto rounded-lg bg-black/40 p-3 text-[11px] leading-relaxed text-zinc-300 sm:p-4 sm:text-xs">
+          <pre className="max-w-full overflow-x-auto rounded-md border border-[var(--border-subtle)] bg-[#0a0a0a] p-3 font-[family-name:var(--font-geist-mono)] text-[11px] leading-relaxed text-[#a1a1a1] sm:p-4 sm:text-xs">
 {`pull_request webhook
         │
         ▼
