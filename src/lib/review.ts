@@ -7,7 +7,9 @@ import {
 } from "./agent";
 import {
   applyDependencyAutofixInSandbox,
+  DependencyAutofixResult,
   formatAutofixCommitMessage,
+  formatAutofixStatusNote,
   isDependencyAutofixEnabled,
 } from "./dependency-autofix";
 import {
@@ -21,6 +23,11 @@ import {
 } from "./github";
 import { withSandbox } from "./sandbox";
 import { PullRequestContext, ReviewResult } from "./types";
+
+interface ReviewWithAutofix {
+  review: ReviewResult;
+  autofix: DependencyAutofixResult | null;
+}
 
 export async function runPullRequestReview(
   octokit: Octokit,
@@ -60,10 +67,12 @@ export async function runPullRequestReview(
     );
 
     let reviewHeadSha = ctx.headSha;
-    let autofixNote = "";
+    let autofixCommitSha: string | undefined;
+    let autofixCommitError: string | undefined;
     const degradedLayers: string[] = [];
+    const autofixEnabled = isDependencyAutofixEnabled();
 
-    const { result: review, degraded } = await withSandbox(
+    const { result: payload, degraded } = await withSandbox<ReviewWithAutofix>(
       {
         cloneUrl,
         revision: ctx.headSha,
@@ -71,65 +80,70 @@ export async function runPullRequestReview(
         password: tokenData.token,
       },
       async (sandbox) => {
-        const reviewResult = await runSecurityReview({
+        const review = await runSecurityReview({
           diff,
           files,
           sandbox,
           signal,
         });
 
-        if (!isDependencyAutofixEnabled()) {
-          return reviewResult;
+        if (!autofixEnabled) {
+          return { review, autofix: null };
         }
 
-        const autofix = await applyDependencyAutofixInSandbox(sandbox, reviewResult.findings);
-        if (!autofix.applied) {
-          if (autofix.error && autofix.packages.length > 0) {
-            degradedLayers.push("autofix");
-            autofixNote = `\n\n> Dependency autofix skipped: ${autofix.error}`;
-          }
-          return reviewResult;
-        }
-
-        try {
-          const { commitSha } = await commitFilesToBranch(octokit, {
-            owner: ctx.owner,
-            repo: ctx.repo,
-            branch: ctx.headRef,
-            message: formatAutofixCommitMessage(autofix.packages),
-            files: autofix.files,
-          });
-
-          reviewHeadSha = commitSha;
-          autofixNote = `\n\n### Dependency autofix\n\nSecureReview committed patched versions to this branch (\`${commitSha.slice(0, 7)}\`):\n${autofix.packages
-            .map((u) => `- \`${u.name}\`: ${u.fromVersion ?? "?"} → \`${u.toVersion}\``)
-            .join("\n")}`;
-
-          return {
-            ...reviewResult,
-            metadata: {
-              ...reviewResult.metadata,
-              autofixCommitSha: commitSha,
-              autofixPackages: autofix.packages.map((u) => u.name),
-            },
-          } satisfies ReviewResult;
-        } catch (err) {
-          degradedLayers.push("autofix");
-          const message = err instanceof Error ? err.message : "commit failed";
-          autofixNote = `\n\n> Dependency autofix failed: ${message}`;
-          return reviewResult;
-        }
+        const autofix = await applyDependencyAutofixInSandbox(sandbox, review.findings);
+        console.error(
+          "Autofix sandbox result:",
+          autofix.applied,
+          autofix.error ?? "",
+          autofix.packages.map((p) => p.name).join(","),
+        );
+        return { review, autofix };
       },
     );
 
-    degradedLayers.push(...review.degradedLayers);
+    if (autofixEnabled && payload.autofix?.applied) {
+      try {
+        const { commitSha } = await commitFilesToBranch(octokit, {
+          owner: ctx.headOwner,
+          repo: ctx.headRepo,
+          branch: ctx.headRef,
+          message: formatAutofixCommitMessage(payload.autofix.packages),
+          files: payload.autofix.files,
+        });
+        autofixCommitSha = commitSha;
+        reviewHeadSha = commitSha;
+        payload.review = {
+          ...payload.review,
+          metadata: {
+            ...payload.review.metadata,
+            autofixCommitSha: commitSha,
+            autofixPackages: payload.autofix.packages.map((u) => u.name),
+          },
+        };
+        console.error("Autofix commit:", commitSha);
+      } catch (err) {
+        autofixCommitError = err instanceof Error ? err.message : "commit failed";
+        degradedLayers.push("autofix");
+        console.error("Autofix commit failed:", autofixCommitError);
+      }
+    } else if (autofixEnabled && payload.autofix?.error && (payload.autofix.packages.length ?? 0) > 0) {
+      degradedLayers.push("autofix");
+    }
+
+    degradedLayers.push(...payload.review.degradedLayers);
     if (degraded) degradedLayers.push("sandbox");
 
-    const reviewResult = { ...review, degradedLayers };
+    const reviewResult = { ...payload.review, degradedLayers };
     const inlineComments = mapFindingsToReviewComments(reviewResult.findings, files);
 
     let summaryBody = buildSummaryComment(reviewResult);
-    if (autofixNote) summaryBody += autofixNote;
+    summaryBody += formatAutofixStatusNote({
+      enabled: autofixEnabled,
+      result: payload.autofix,
+      commitSha: autofixCommitSha,
+      commitError: autofixCommitError,
+    });
 
     const event = hasCriticalFindings(reviewResult.findings) ? "REQUEST_CHANGES" : "COMMENT";
 

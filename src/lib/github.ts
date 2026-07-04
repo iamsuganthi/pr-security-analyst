@@ -37,7 +37,11 @@ export interface PullRequestPayload {
   installation?: { id: number };
   pull_request: {
     number: number;
-    head: { sha: string; ref: string };
+    head: {
+      sha: string;
+      ref: string;
+      repo: { name: string; owner: { login: string } };
+    };
     base: { sha: string; ref: string };
   };
   repository: {

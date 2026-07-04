@@ -1,4 +1,5 @@
 import { SemgrepFinding, SemgrepFindingSchema } from "./types";
+import { isSemgrepEnabled } from "./config";
 
 export interface SandboxToolResult {
   content: string;
@@ -411,7 +412,9 @@ export async function createSandboxSession(
   const localBin = `${home}/.local/bin`;
 
   await installRipgrep(sandbox, localBin);
-  const semgrepInstall = await installSemgrepInSandbox(sandbox, localBin, home);
+  const semgrepInstall = isSemgrepEnabled()
+    ? await installSemgrepInSandbox(sandbox, localBin, home)
+    : null;
 
   const workspace = await runSandboxShell(
     sandbox,

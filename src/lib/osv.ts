@@ -22,23 +22,53 @@ export interface OsvQueryResult {
 
 const OSV_API = "https://api.osv.dev/v1/query";
 
+const DEPENDENCY_SECTIONS = new Set([
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+]);
+
 export function parsePackageJsonDiff(patch: string): PackageChange[] {
   const changes: PackageChange[] = [];
-  const depSections = ["dependencies", "devDependencies", "peerDependencies"];
+  let currentSection: string | null = null;
 
-  for (const section of depSections) {
-    const sectionRegex = new RegExp(`"${section}"\\s*:\\s*\\{([^}]*)\\}`, "s");
-    const sectionMatch = patch.match(sectionRegex);
-    if (!sectionMatch) continue;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+++")) continue;
 
-    const addedLines = sectionMatch[1]
-      .split("\n")
-      .filter((line) => line.trim().startsWith("+") && !line.includes(`"${section}"`));
+    const content = line.startsWith("+")
+      ? line.slice(1)
+      : line.startsWith(" ")
+        ? line.slice(1)
+        : line.startsWith("-")
+          ? line.slice(1)
+          : line;
 
-    for (const line of addedLines) {
-      const match = line.match(/"([^"]+)"\s*:\s*"([^"]+)"/);
-      if (match) {
-        changes.push({ name: match[1], version: match[2], ecosystem: "npm" });
+    const sectionMatch = content.match(/^\s*"([^"]+)"\s*:\s*\{\s*$/);
+    if (sectionMatch && DEPENDENCY_SECTIONS.has(sectionMatch[1]!)) {
+      currentSection = sectionMatch[1]!;
+      continue;
+    }
+
+    if (/^\s*\},?\s*$/.test(content)) {
+      currentSection = null;
+      continue;
+    }
+
+    if (!line.startsWith("+") || !currentSection) continue;
+
+    const depMatch = content.match(/^\s*"([^"]+)":\s*"([^"]+)"/);
+    if (depMatch) {
+      changes.push({ name: depMatch[1]!, version: depMatch[2]!, ecosystem: "npm" });
+    }
+  }
+
+  if (changes.length === 0) {
+    for (const line of patch.split("\n")) {
+      if (!line.startsWith("+") || line.startsWith("+++")) continue;
+      const depMatch = line.match(/^\+\s*"([^"]+)":\s*"([^"]+)"/);
+      if (depMatch) {
+        changes.push({ name: depMatch[1]!, version: depMatch[2]!, ecosystem: "npm" });
       }
     }
   }
@@ -147,15 +177,27 @@ function mapOsvSeverity(vuln: OsvVulnerability): Finding["severity"] {
 }
 
 function extractFixedVersion(vuln: OsvVulnerability, packageName: string): string | undefined {
+  const fixed: string[] = [];
   for (const affected of vuln.affected ?? []) {
     if (affected.package.name !== packageName) continue;
     for (const range of affected.ranges ?? []) {
       for (const event of range.events ?? []) {
-        if (event.fixed) return event.fixed;
+        if (event.fixed) fixed.push(event.fixed);
       }
     }
   }
-  return undefined;
+  if (fixed.length === 0) return undefined;
+  return fixed.reduce((best, current) => (compareOsvVersion(current, best) > 0 ? current : best));
+}
+
+function compareOsvVersion(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
 
 export function validateCveIds(

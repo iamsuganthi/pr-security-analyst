@@ -17,6 +17,22 @@ describe("parsePackageJsonDiff", () => {
       { name: "lodash", version: "4.17.4", ecosystem: "npm" },
     ]);
   });
+
+  it("extracts added deps from GitHub hunk without closing brace", () => {
+    const patch = `@@ -9,6 +9,7 @@
+     "lint": "eslint"
+   },
+   "dependencies": {
++    "lodash": "4.17.4",
+     "next": "16.2.10",
+     "react": "19.2.4",
+     "react-dom": "19.2.4"`;
+
+    const changes = parsePackageJsonDiff(patch);
+    expect(changes).toEqual([
+      { name: "lodash", version: "4.17.4", ecosystem: "npm" },
+    ]);
+  });
 });
 
 describe("extractPackageChangesFromFiles", () => {
@@ -30,7 +46,7 @@ describe("extractPackageChangesFromFiles", () => {
     ];
 
     const changes = extractPackageChangesFromFiles(files);
-    expect(changes.length).toBeGreaterThanOrEqual(0);
+    expect(changes).toEqual([{ name: "lodash", version: "4.17.4", ecosystem: "npm" }]);
   });
 });
 

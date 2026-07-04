@@ -80,6 +80,8 @@ export interface PullRequestContext {
   pullNumber: number;
   headSha: string;
   headRef: string;
+  headOwner: string;
+  headRepo: string;
   baseSha: string;
   installationId: number;
   deliveryId: string;

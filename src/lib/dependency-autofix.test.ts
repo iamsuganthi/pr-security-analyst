@@ -3,6 +3,7 @@ import {
   bumpPackageJson,
   collectPackageUpgrades,
   compareSemver,
+  formatAutofixStatusNote,
   pickHighestVersion,
 } from "./dependency-autofix";
 import { Finding } from "./types";
@@ -89,5 +90,20 @@ describe("bumpPackageJson", () => {
     expect(parsed.dependencies.lodash).toBe("4.17.21");
     expect(parsed.dependencies.express).toBe("^4.18.0");
     expect(applied).toHaveLength(1);
+  });
+});
+
+describe("formatAutofixStatusNote", () => {
+  it("explains when commit failed", () => {
+    const note = formatAutofixStatusNote({
+      enabled: true,
+      result: {
+        applied: true,
+        packages: [{ name: "lodash", toVersion: "4.17.21", cveIds: ["GHSA-x"] }],
+        files: [],
+      },
+      commitError: "Resource not accessible by integration",
+    });
+    expect(note).toContain("failed to commit");
   });
 });

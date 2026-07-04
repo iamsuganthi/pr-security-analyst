@@ -139,22 +139,27 @@ export async function applyDependencyAutofixInSandbox(
   }
 
   const writeResult = await sandbox.runShell(
-    `cat > package.json <<'__PKG_EOF__'\n${updatedPkg}__PKG_EOF__`,
+    `node -e "require('fs').writeFileSync('package.json', Buffer.from('${Buffer.from(updatedPkg, "utf-8").toString("base64")}', 'base64'))"`,
   );
   if (writeResult.exitCode !== 0) {
     return {
       applied: false,
       packages: applied,
       files: [],
-      error: writeResult.stderr || "Failed to write package.json",
+      error: writeResult.stderr || writeResult.stdout || "Failed to write package.json",
     };
   }
 
   const installArgs = applied.map((u) => `${u.name}@${u.toVersion}`).join(" ");
   const npmResult = await sandbox.runShell(
-    `npm install ${installArgs} --package-lock-only --ignore-scripts --no-audit --no-fund 2>&1`,
+    `set -e
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+cd "$ROOT"
+NPM=$(command -v npm || command -v npm.cmd || echo npm)
+$NPM install ${installArgs} --package-lock-only --ignore-scripts --no-audit --no-fund`,
   );
   if (npmResult.exitCode !== 0) {
+    console.error("Autofix npm failed:", npmResult.stdout, npmResult.stderr);
     return {
       applied: false,
       packages: applied,
@@ -198,4 +203,40 @@ export function formatAutofixCommitMessage(upgrades: PackageUpgrade[]): string {
     "",
     "Automated dependency upgrade based on OSV advisories with available fixed versions.",
   ].join("\n");
+}
+
+export function formatAutofixStatusNote(params: {
+  enabled: boolean;
+  result: DependencyAutofixResult | null;
+  commitSha?: string;
+  commitError?: string;
+}): string {
+  if (!params.enabled) {
+    return "\n\n> Dependency autofix is disabled (`SECUREREVIEW_AUTOFIX_DEPS=false`).";
+  }
+
+  const { result, commitSha, commitError } = params;
+  if (!result) {
+    return "\n\n> Dependency autofix: not run (sandbox unavailable).";
+  }
+
+  if (commitSha && result.applied) {
+    return `\n\n### Dependency autofix\n\nSecureReview committed patched versions to this branch (\`${commitSha.slice(0, 7)}\`):\n${result.packages
+      .map((u) => `- \`${u.name}\`: ${u.fromVersion ?? "?"} → \`${u.toVersion}\``)
+      .join("\n")}`;
+  }
+
+  if (commitError) {
+    return `\n\n> Dependency autofix failed to commit: ${commitError}`;
+  }
+
+  if (result.applied && !commitSha) {
+    return "\n\n> Dependency autofix prepared files but no commit SHA was returned.";
+  }
+
+  if (result.packages.length === 0) {
+    return "\n\n> Dependency autofix: no OSV advisories with a known fixed version in this PR.";
+  }
+
+  return `\n\n> Dependency autofix skipped: ${result.error ?? "unknown error"}`;
 }
