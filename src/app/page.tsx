@@ -1,163 +1,155 @@
-import fs from "node:fs";
-import path from "node:path";
-import { OwaspCategory } from "@/lib/types";
-
-interface EvalScorecard {
-  model: string;
-  timestamp: string;
-  recall: Record<OwaspCategory | "clean", number>;
-  precision: number;
-  falsePositives: number;
-  injectionResisted: boolean;
-  latencyMs: number;
-  llmRecall?: number;
-  findingsBySource: { llm: number; osv: number };
-}
-
-function loadLatestScorecard(): EvalScorecard | null {
-  const resultsDir = path.join(process.cwd(), "evals", "results");
-  if (!fs.existsSync(resultsDir)) return null;
-
-  const files = fs
-    .readdirSync(resultsDir)
-    .filter((f) => f.endsWith(".json") && !f.includes("placeholder"))
-    .sort()
-    .reverse();
-
-  if (files.length === 0) return null;
-
-  try {
-    const raw = fs.readFileSync(path.join(resultsDir, files[0]!), "utf-8");
-    return JSON.parse(raw) as EvalScorecard;
-  } catch {
-    return null;
-  }
-}
+const GITHUB_APP_INSTALL_URL =
+  "https://github.com/apps/pr-security-analyst/installations/new";
 
 export default function HomePage() {
-  const scorecard = loadLatestScorecard();
-
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-4xl px-6 py-16">
-        <header className="mb-12">
+      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
+        <header className="mb-8 sm:mb-10">
           <p className="mb-2 text-sm font-medium uppercase tracking-widest text-emerald-400">
-            SecureReview
+            Secure Review
           </p>
-          <h1 className="mb-4 text-4xl font-bold tracking-tight">
-            Agentic PR Security Review
+          <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            Security review on every pull request
           </h1>
-          <p className="max-w-2xl text-lg text-zinc-400">
-            A GitHub App that reviews every pull request — posts inline comments and a Check Run.
-            An AI agent investigates the cloned repo with sandbox tools; OSV grounds dependency CVEs
-            and can auto-commit safe version bumps.
+          <p className="max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
+            Fix security vulnerabilities before a pull request is merged. SecureReview gives
+            every PR an automated security pass — so teams move fast without shipping blind.
           </p>
         </header>
 
-        <section className="mb-12 grid gap-4 sm:grid-cols-3">
+        <section className="mb-8 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4 sm:mb-10 sm:p-6">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-emerald-300">
+            <GitHubIcon className="h-5 w-5 shrink-0" />
+            Try it on GitHub
+          </h2>
+          <ol className="mb-5 ml-4 list-decimal space-y-3 text-sm leading-relaxed text-zinc-300">
+            <li>
+              <a
+                href={GITHUB_APP_INSTALL_URL}
+                className="font-medium text-emerald-400 underline-offset-2 hover:underline"
+              >
+                Install the GitHub App
+              </a>{" "}
+              on one or more repositories
+            </li>
+            <li>Open a PR — expand below if you need inspiration</li>
+            <li>
+              Watch for a PR review comment, inline notes on changed lines, and a{" "}
+              <strong className="font-medium text-zinc-200">SecureReview</strong> check
+            </li>
+          </ol>
+          <a
+            href={GITHUB_APP_INSTALL_URL}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 sm:inline-flex sm:w-auto sm:py-2.5"
+          >
+            <GitHubIcon className="h-4 w-4 shrink-0" />
+            Install on GitHub →
+          </a>
+          <details className="group mt-5 border-t border-emerald-900/40 pt-4">
+            <summary className="cursor-pointer list-none py-1 text-sm text-zinc-400 transition hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
+              <span className="inline-flex min-h-11 items-center gap-2">
+                <span
+                  className="text-emerald-400/70 transition group-open:rotate-90"
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+                Need inspiration for a test PR?
+              </span>
+            </summary>
+            <ul className="mt-2 space-y-3 break-words border-l border-zinc-800 pl-4 text-sm leading-relaxed text-zinc-400">
+              <li>
+                Add <code className="break-all text-emerald-400">lodash@4.17.4</code> to{" "}
+                <code className="break-all text-zinc-300">package.json</code> — CVE alerts and
+                often an autofix commit
+              </li>
+              <li>A delete route with no auth check — flags missing authorization</li>
+              <li>
+                Server-side <code className="break-all text-zinc-300">fetch(userUrl)</code> —
+                flags SSRF risk
+              </li>
+              <li>SQL built from user input — flags injection risk</li>
+            </ul>
+          </details>
+        </section>
+
+        <section className="mb-8 grid gap-4 sm:mb-10 sm:grid-cols-3">
           {[
             {
-              title: "AI Agent",
-              desc: "Multi-step review with readFile, grep, lookupCve, and structured submitFindings.",
+              title: "Agent for judgment",
+              desc: "Finds auth gaps, insecure design, and context-dependent bugs by reading surrounding code — not just pattern matching the diff.",
             },
             {
-              title: "OSV.dev",
-              desc: "Known CVE alerts on dependency bumps — CVE IDs validated, never hallucinated.",
+              title: "OSV for facts",
+              desc: "Known CVEs when npm dependencies change in package.json — advisory IDs from OSV.dev, never hallucinated.",
             },
             {
-              title: "Fallbacks",
-              desc: "Model routing, diff-only triage, per-layer degradation, and eval regression checks.",
+              title: "Graceful degradation",
+              desc: "If OSV or the model fails, the review says so explicitly instead of silently passing.",
             },
           ].map((item) => (
             <div
               key={item.title}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5"
+              className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 sm:p-5"
             >
               <h3 className="mb-2 font-semibold text-emerald-400">{item.title}</h3>
-              <p className="text-sm text-zinc-400">{item.desc}</p>
+              <p className="text-sm leading-relaxed text-zinc-400">{item.desc}</p>
             </div>
           ))}
         </section>
 
-        <section className="mb-12 rounded-xl border border-zinc-800 bg-zinc-900/30 p-6">
-          <h2 className="mb-4 text-xl font-semibold">Agent workflow</h2>
-          <pre className="overflow-x-auto rounded-lg bg-black/40 p-4 text-xs leading-relaxed text-zinc-300">
-{`GitHub App — pull_request webhook
+        <details className="group mb-8 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 sm:mb-10 sm:p-6">
+          <summary className="cursor-pointer list-none py-1 text-base font-semibold text-zinc-200 transition hover:text-white sm:text-lg [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex min-h-11 items-center gap-2">
+              <span
+                className="text-emerald-400/70 transition group-open:rotate-90"
+                aria-hidden="true"
+              >
+                ›
+              </span>
+              How it works
+            </span>
+          </summary>
+          <p className="mb-4 mt-2 text-sm leading-relaxed text-zinc-400">
+            Each review spins up a fresh sandbox,
+            clones at the PR head, and posts results back to GitHub.
+          </p>
+          <pre className="max-w-full overflow-x-auto rounded-lg bg-black/40 p-3 text-[11px] leading-relaxed text-zinc-300 sm:p-4 sm:text-xs">
+{`pull_request webhook
         │
         ▼
-Clone repo @ PR head (Vercel Sandbox)
+Clone repo @ PR head (Vercel Sandbox — ephemeral)
         │
         ▼
-① Triage (cheap model) — pick security-relevant files
+Triage → security-relevant changed files
         │
         ▼
-② OSV — CVE lookup on dependency changes
+OSV.dev → CVEs on package.json changes (npm, today)
         │
         ▼
-③ Agent (AI SDK + Gateway)
-     sandbox tools: readFile · grep · lookupCve · submitFindings
+AI agent → read diff + surrounding code; reason about
+           auth, injection, SSRF, trust boundaries;
+           dedupe findings, suggest fixes
         │
         ▼
-④ GitHub PR review + SecureReview Check Run`}
+GitHub PR review + SecureReview check run (+ optional autofix commit)`}
           </pre>
-          <p className="mt-4 text-sm text-zinc-500">
-            Production: open a PR on a connected repo. Local dev:{" "}
-            <code className="text-emerald-400">npm run demo</code> · Eval:{" "}
-            <code className="text-emerald-400">npm run eval</code>
-          </p>
-        </section>
-
-        {scorecard ? (
-          <section className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-6">
-            <h2 className="mb-4 text-xl font-semibold">Latest Eval Scorecard</h2>
-            <p className="mb-4 text-sm text-zinc-400">
-              Model: {scorecard.model} · {new Date(scorecard.timestamp).toLocaleString()}
-            </p>
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <Metric label="Precision (clean PRs)" value={`${(scorecard.precision * 100).toFixed(0)}%`} />
-              <Metric
-                label="LLM recall (logic flaws)"
-                value={`${((scorecard.llmRecall ?? 0) * 100).toFixed(0)}%`}
-              />
-              <Metric label="Prompt injection resisted" value={scorecard.injectionResisted ? "Yes" : "No"} />
-              <Metric label="Latency" value={`${(scorecard.latencyMs / 1000).toFixed(1)}s`} />
-            </div>
-            <h3 className="mb-2 text-sm font-medium text-zinc-300">Recall by OWASP category</h3>
-            <div className="grid grid-cols-5 gap-2 text-center text-xs sm:grid-cols-10">
-              {(Object.entries(scorecard.recall) as [string, number][]).map(([cat, val]) => (
-                <div
-                  key={cat}
-                  className={`rounded px-1 py-2 ${val >= 1 ? "bg-emerald-900/40 text-emerald-300" : cat === "clean" ? "bg-zinc-800 text-zinc-400" : "bg-red-900/30 text-red-300"}`}
-                >
-                  <div className="font-mono">{cat}</div>
-                  <div>{cat === "clean" ? (val === 0 ? "✓" : "✗") : val >= 1 ? "✓" : "✗"}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : (
-          <section className="rounded-xl border border-dashed border-zinc-700 p-6 text-center text-zinc-500">
-            Run <code className="text-emerald-400">npm run eval</code> to generate scorecards in{" "}
-            <code className="text-emerald-400">evals/results/</code>
-          </section>
-        )}
-
-        <footer className="mt-16 border-t border-zinc-800 pt-8 text-sm text-zinc-500">
-          <p>
-            Install the GitHub App and configure{" "}
-            <code className="text-zinc-400">POST /api/webhooks/github</code> to review PRs in production.
-          </p>
-        </footer>
+        </details>
       </div>
     </main>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function GitHubIcon({ className }: { className?: string }) {
   return (
-    <div className="rounded-lg bg-black/30 px-4 py-3">
-      <div className="text-xs text-zinc-500">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
-    </div>
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
   );
 }
