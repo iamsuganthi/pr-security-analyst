@@ -12,7 +12,9 @@ export function createMockSandbox(diff: string): SandboxSession {
     async readFile(filePath: string) {
       return { content: fileContents.get(filePath) ?? `// mock content for ${filePath}` };
     },
-    async grep(pattern: string) {
+    async grep(pattern: string, path?: string, glob?: string) {
+      void path;
+      void glob;
       if (diff.includes(pattern.replace(/\\/g, ""))) {
         return { content: diff.split("\n").filter((l) => l.includes("+")).join("\n") };
       }
@@ -20,6 +22,9 @@ export function createMockSandbox(diff: string): SandboxSession {
     },
     async runShell() {
       return { exitCode: 1, stdout: "", stderr: "mock sandbox" };
+    },
+    async writeFile() {
+      return { error: "mock sandbox" };
     },
     async destroy() {},
   };

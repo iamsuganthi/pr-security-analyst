@@ -6,6 +6,7 @@ import {
   isDuplicateDelivery,
   isReviewablePullRequestAction,
   parsePullRequestPayload,
+  clearRun,
   registerRun,
   runKey,
   verifyGitHubWebhookSignature,
@@ -78,6 +79,8 @@ export async function POST(request: NextRequest) {
         await runPullRequestReview(octokit, ctx, abortController.signal);
       } catch (err) {
         console.error("SecureReview failed:", err);
+      } finally {
+        clearRun(key);
       }
     })(),
   );

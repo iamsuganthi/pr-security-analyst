@@ -1,4 +1,5 @@
 import { Finding } from "./types";
+import { pickHighestVersion } from "./osv";
 import { SandboxSession } from "./sandbox";
 
 export interface PackageUpgrade {
@@ -21,6 +22,30 @@ const DEPENDENCY_SECTIONS = [
   "peerDependencies",
   "optionalDependencies",
 ] as const;
+
+export function bumpPackageJson(
+  packageJson: string,
+  upgrades: PackageUpgrade[],
+): { content: string; applied: PackageUpgrade[] } {
+  const pkg = JSON.parse(packageJson) as Record<string, Record<string, string> | undefined>;
+  const applied: PackageUpgrade[] = [];
+
+  for (const upgrade of upgrades) {
+    let changed = false;
+    for (const section of DEPENDENCY_SECTIONS) {
+      const deps = pkg[section];
+      if (!deps?.[upgrade.name]) continue;
+      deps[upgrade.name] = upgrade.toVersion;
+      changed = true;
+    }
+    if (changed) applied.push(upgrade);
+  }
+
+  return {
+    content: `${JSON.stringify(pkg, null, 2)}\n`,
+    applied,
+  };
+}
 
 export function collectPackageUpgrades(findings: Finding[]): PackageUpgrade[] {
   const byPackage = new Map<
@@ -48,51 +73,6 @@ export function collectPackageUpgrades(findings: Finding[]): PackageUpgrade[] {
     toVersion: pickHighestVersion(entry.fixedVersions),
     cveIds: [...entry.cveIds],
   }));
-}
-
-export function pickHighestVersion(versions: string[]): string {
-  return versions.reduce((best, current) =>
-    compareSemver(current, best) > 0 ? current : best,
-  );
-}
-
-export function compareSemver(a: string, b: string): number {
-  const pa = parseSemver(a);
-  const pb = parseSemver(b);
-  for (let i = 0; i < 3; i++) {
-    if (pa[i] !== pb[i]) return pa[i]! - pb[i]!;
-  }
-  return 0;
-}
-
-function parseSemver(version: string): [number, number, number] {
-  const core = version.trim().replace(/^[^\d]*/, "").split("-")[0] ?? "";
-  const [major = "0", minor = "0", patch = "0"] = core.split(".");
-  return [Number(major) || 0, Number(minor) || 0, Number(patch) || 0];
-}
-
-export function bumpPackageJson(
-  packageJson: string,
-  upgrades: PackageUpgrade[],
-): { content: string; applied: PackageUpgrade[] } {
-  const pkg = JSON.parse(packageJson) as Record<string, Record<string, string> | undefined>;
-  const applied: PackageUpgrade[] = [];
-
-  for (const upgrade of upgrades) {
-    let changed = false;
-    for (const section of DEPENDENCY_SECTIONS) {
-      const deps = pkg[section];
-      if (!deps?.[upgrade.name]) continue;
-      deps[upgrade.name] = upgrade.toVersion;
-      changed = true;
-    }
-    if (changed) applied.push(upgrade);
-  }
-
-  return {
-    content: `${JSON.stringify(pkg, null, 2)}\n`,
-    applied,
-  };
 }
 
 export async function applyDependencyAutofixInSandbox(
@@ -134,15 +114,13 @@ export async function applyDependencyAutofixInSandbox(
     };
   }
 
-  const writeResult = await sandbox.runShell(
-    `node -e "require('fs').writeFileSync('package.json', Buffer.from('${Buffer.from(updatedPkg, "utf-8").toString("base64")}', 'base64'))"`,
-  );
-  if (writeResult.exitCode !== 0) {
+  const writeResult = await sandbox.writeFile("package.json", updatedPkg);
+  if (writeResult.error) {
     return {
       applied: false,
       packages: applied,
       files: [],
-      error: writeResult.stderr || writeResult.stdout || "Failed to write package.json",
+      error: writeResult.error,
     };
   }
 

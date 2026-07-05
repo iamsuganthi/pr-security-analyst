@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   bumpPackageJson,
   collectPackageUpgrades,
-  compareSemver,
   formatAutofixStatusNote,
-  pickHighestVersion,
 } from "./dependency-autofix";
+import { compareSemver, pickHighestVersion } from "./osv";
 import { Finding } from "./types";
 
 describe("collectPackageUpgrades", () => {

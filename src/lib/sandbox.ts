@@ -3,10 +3,17 @@ export interface SandboxToolResult {
   error?: string;
 }
 
+export interface ShellResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
 export interface SandboxSession {
   readFile(path: string): Promise<SandboxToolResult>;
   grep(pattern: string, path?: string, glob?: string): Promise<SandboxToolResult>;
-  runShell(script: string): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+  runShell(script: string): Promise<ShellResult>;
+  writeFile(path: string, content: string): Promise<{ error?: string }>;
   destroy(): Promise<void>;
 }
 
@@ -33,7 +40,7 @@ async function runSandboxShell(
   sandbox: SandboxCommandRunner,
   script: string,
   sudo = false,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+): Promise<ShellResult> {
   const result = await sandbox.runCommand({
     cmd: "sh",
     args: ["-c", script],
@@ -62,6 +69,28 @@ fi
 `,
     false,
   );
+}
+
+async function writeFileInSandbox(
+  sandbox: SandboxCommandRunner,
+  path: string,
+  content: string,
+): Promise<{ error?: string }> {
+  const encoded = Buffer.from(content, "utf-8").toString("base64");
+  const result = await sandbox.runCommand({
+    cmd: "node",
+    args: [
+      "-e",
+      "require('fs').writeFileSync(process.argv[1], Buffer.from(process.argv[2], 'base64'))",
+      path,
+      encoded,
+    ],
+  });
+
+  if (result.exitCode !== 0) {
+    return { error: (await result.stderr()) || "writeFile failed" };
+  }
+  return {};
 }
 
 export async function createSandboxSession(
@@ -97,31 +126,14 @@ export async function createSandboxSession(
   const homeResult = await runSandboxShell(sandbox, 'printf "%s" "$HOME"', false);
   const home = homeResult.stdout.trim() || "/tmp";
   const localBin = `${home}/.local/bin`;
+  const toolPath = `${localBin}:/usr/bin:/bin`;
 
   await installRipgrep(sandbox, localBin);
-
-  const workspace = await runSandboxShell(
-    sandbox,
-    "pwd && ls -la 2>/dev/null | head -25",
-    false,
-  );
-  console.error(
-    "Sandbox workspace:",
-    workspace.stdout.trim() || workspace.stderr.trim() || "(empty)",
-  );
-
-  const toolEnv = {
-    TMPDIR: `${home}/.tmp`,
-    PATH: `${localBin}:/usr/bin:/bin`,
-  };
 
   const session: SandboxSession = {
     async readFile(path: string): Promise<SandboxToolResult> {
       try {
-        const result = await sandbox.runCommand({
-          cmd: "cat",
-          args: [path],
-        });
+        const result = await sandbox.runCommand({ cmd: "cat", args: [path] });
         const content = await result.stdout();
         if (result.exitCode !== 0) {
           return { content: "", error: (await result.stderr()) || "File not found" };
@@ -136,7 +148,11 @@ export async function createSandboxSession(
       try {
         const args = ["--no-heading", "--line-number", "-C", "2", pattern, path];
         if (glob) args.splice(4, 0, "--glob", glob);
-        const result = await sandbox.runCommand({ cmd: "rg", args, env: toolEnv });
+        const result = await sandbox.runCommand({
+          cmd: "rg",
+          args,
+          env: { PATH: toolPath },
+        });
         const content = await result.stdout();
         return { content: content || "(no matches)" };
       } catch (err) {
@@ -144,8 +160,16 @@ export async function createSandboxSession(
       }
     },
 
-    async runShell(script: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-      return runSandboxShell(sandbox, script, false);
+    async runShell(script: string): Promise<ShellResult> {
+      return runSandboxShell(sandbox, script);
+    },
+
+    async writeFile(path: string, content: string): Promise<{ error?: string }> {
+      try {
+        return await writeFileInSandbox(sandbox, path, content);
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "writeFile failed" };
+      }
     },
 
     async destroy(): Promise<void> {
@@ -169,7 +193,8 @@ export async function withSandbox<T>(
     session = await createSandboxSession(options);
     const result = await fn(session);
     return { result, degraded: false };
-  } catch {
+  } catch (err) {
+    console.error("Sandbox creation failed, using diff-only fallback:", err);
     return {
       result: await fn(createLocalFallbackSession()),
       degraded: true,
@@ -188,7 +213,10 @@ function createLocalFallbackSession(): SandboxSession {
       return { content: "", error: "Sandbox unavailable — diff-only mode" };
     },
     async runShell() {
-      return { exitCode: 1, stdout: "", stderr: "Sandbox unavailable" };
+      return { exitCode: 1, stdout: "", stderr: "Sandbox unavailable — diff-only mode" };
+    },
+    async writeFile() {
+      return { error: "Sandbox unavailable — diff-only mode" };
     },
     async destroy() {},
   };

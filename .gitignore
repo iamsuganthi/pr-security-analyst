@@ -14,6 +14,7 @@
 # next.js
 /.next/
 /out/
+src/app/.well-known/
 
 # production
 /build

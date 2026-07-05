@@ -182,30 +182,51 @@ export async function postPullRequestReview(
     event: "COMMENT" | "REQUEST_CHANGES";
   },
 ): Promise<void> {
-  if (params.comments.length > 0) {
-    await octokit.pulls.createReview({
-      owner: params.owner,
-      repo: params.repo,
-      pull_number: params.pullNumber,
-      commit_id: params.commitId,
-      body: params.body,
-      event: params.event,
-      comments: params.comments.map((c) => ({
-        path: c.path,
-        line: c.line,
-        body: c.body,
-        side: c.side ?? "RIGHT",
-      })),
-    });
-    return;
-  }
-
-  await octokit.issues.createComment({
+  await octokit.pulls.createReview({
     owner: params.owner,
     repo: params.repo,
-    issue_number: params.pullNumber,
+    pull_number: params.pullNumber,
+    commit_id: params.commitId,
     body: params.body,
+    event: params.event,
+    comments: params.comments.map((c) => ({
+      path: c.path,
+      line: c.line,
+      body: c.body,
+      side: c.side ?? "RIGHT",
+    })),
   });
+}
+
+export interface PullRequestReviewInputs {
+  diff: string;
+  files: Awaited<ReturnType<typeof fetchPullRequestFiles>>;
+  cloneUrl: string;
+  installToken: string;
+}
+
+export async function fetchPullRequestReviewInputs(
+  octokit: Octokit,
+  ctx: {
+    owner: string;
+    repo: string;
+    pullNumber: number;
+    installationId: number;
+  },
+): Promise<PullRequestReviewInputs> {
+  const [diff, files, { data: repoData }, { data: tokenData }] = await Promise.all([
+    fetchPullRequestDiff(octokit, ctx.owner, ctx.repo, ctx.pullNumber),
+    fetchPullRequestFiles(octokit, ctx.owner, ctx.repo, ctx.pullNumber),
+    octokit.repos.get({ owner: ctx.owner, repo: ctx.repo }),
+    octokit.apps.createInstallationAccessToken({ installation_id: ctx.installationId }),
+  ]);
+
+  const cloneUrl = repoData.clone_url.replace(
+    "https://",
+    `https://x-access-token:${tokenData.token}@`,
+  );
+
+  return { diff, files, cloneUrl, installToken: tokenData.token };
 }
 
 export async function commitFilesToBranch(
@@ -271,25 +292,4 @@ export async function commitFilesToBranch(
   });
 
   return { commitSha: commit.sha };
-}
-
-export function formatFindingComment(finding: {
-  severity: string;
-  owaspCategory: string;
-  message: string;
-  suggestedFix: string;
-  source: string;
-  cwe?: string;
-  cveId?: string;
-}): string {
-  const lines = [
-    `**${finding.severity.toUpperCase()}** · ${finding.owaspCategory}${finding.cwe ? ` · ${finding.cwe}` : ""}`,
-    "",
-    finding.message,
-    "",
-    `**Suggested fix:** ${finding.suggestedFix}`,
-    "",
-    `_Source: ${finding.source}${finding.cveId ? ` · ${finding.cveId}` : ""}_`,
-  ];
-  return lines.join("\n");
 }

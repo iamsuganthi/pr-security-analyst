@@ -68,14 +68,6 @@ export interface PullRequestContext {
   deliveryId: string;
 }
 
-export interface DiffFile {
-  filename: string;
-  status: string;
-  patch?: string;
-  additions: number;
-  deletions: number;
-}
-
 export const SEVERITY_ORDER: Record<Severity, number> = {
   critical: 0,
   high: 1,

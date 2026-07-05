@@ -1,4 +1,4 @@
-import { Finding, OwaspCategory } from "./types";
+import { Finding } from "./types";
 
 export interface PackageChange {
   name: string;
@@ -28,6 +28,27 @@ const DEPENDENCY_SECTIONS = new Set([
   "peerDependencies",
   "optionalDependencies",
 ]);
+
+export function compareSemver(a: string, b: string): number {
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i]! - pb[i]!;
+  }
+  return 0;
+}
+
+export function pickHighestVersion(versions: string[]): string {
+  return versions.reduce((best, current) =>
+    compareSemver(current, best) > 0 ? current : best,
+  );
+}
+
+function parseSemver(version: string): [number, number, number] {
+  const core = version.trim().replace(/^[^\d]*/, "").split("-")[0] ?? "";
+  const [major = "0", minor = "0", patch = "0"] = core.split(".");
+  return [Number(major) || 0, Number(minor) || 0, Number(patch) || 0];
+}
 
 export function parsePackageJsonDiff(patch: string): PackageChange[] {
   const changes: PackageChange[] = [];
@@ -187,17 +208,7 @@ function extractFixedVersion(vuln: OsvVulnerability, packageName: string): strin
     }
   }
   if (fixed.length === 0) return undefined;
-  return fixed.reduce((best, current) => (compareOsvVersion(current, best) > 0 ? current : best));
-}
-
-function compareOsvVersion(a: string, b: string): number {
-  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
+  return pickHighestVersion(fixed);
 }
 
 export function validateCveIds(
@@ -208,9 +219,4 @@ export function validateCveIds(
     if (f.source !== "osv" || !f.cveId) return true;
     return allowedCveIds.has(f.cveId);
   });
-}
-
-export function mapOwaspFromCategory(category: string): OwaspCategory {
-  const match = category.match(/A\d{2}/);
-  return (match?.[0] ?? "A06") as OwaspCategory;
 }
