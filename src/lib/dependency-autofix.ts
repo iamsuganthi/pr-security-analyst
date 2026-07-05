@@ -22,10 +22,6 @@ const DEPENDENCY_SECTIONS = [
   "optionalDependencies",
 ] as const;
 
-export function isDependencyAutofixEnabled(): boolean {
-  return process.env.SECUREREVIEW_AUTOFIX_DEPS !== "false";
-}
-
 export function collectPackageUpgrades(findings: Finding[]): PackageUpgrade[] {
   const byPackage = new Map<
     string,
@@ -206,15 +202,10 @@ export function formatAutofixCommitMessage(upgrades: PackageUpgrade[]): string {
 }
 
 export function formatAutofixStatusNote(params: {
-  enabled: boolean;
   result: DependencyAutofixResult | null;
   commitSha?: string;
   commitError?: string;
 }): string {
-  if (!params.enabled) {
-    return "\n\n> Dependency autofix is disabled (`SECUREREVIEW_AUTOFIX_DEPS=false`).";
-  }
-
   const { result, commitSha, commitError } = params;
   if (!result) {
     return "\n\n> Dependency autofix: not run (sandbox unavailable).";

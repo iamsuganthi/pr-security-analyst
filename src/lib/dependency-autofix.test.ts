@@ -96,7 +96,6 @@ describe("bumpPackageJson", () => {
 describe("formatAutofixStatusNote", () => {
   it("explains when commit failed", () => {
     const note = formatAutofixStatusNote({
-      enabled: true,
       result: {
         applied: true,
         packages: [{ name: "lodash", toVersion: "4.17.21", cveIds: ["GHSA-x"] }],

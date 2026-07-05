@@ -10,7 +10,6 @@ import {
   DependencyAutofixResult,
   formatAutofixCommitMessage,
   formatAutofixStatusNote,
-  isDependencyAutofixEnabled,
 } from "./dependency-autofix";
 import {
   commitFilesToBranch,
@@ -70,7 +69,6 @@ export async function runPullRequestReview(
     let autofixCommitSha: string | undefined;
     let autofixCommitError: string | undefined;
     const degradedLayers: string[] = [];
-    const autofixEnabled = isDependencyAutofixEnabled();
 
     const { result: payload, degraded } = await withSandbox<ReviewWithAutofix>(
       {
@@ -87,10 +85,6 @@ export async function runPullRequestReview(
           signal,
         });
 
-        if (!autofixEnabled) {
-          return { review, autofix: null };
-        }
-
         const autofix = await applyDependencyAutofixInSandbox(sandbox, review.findings);
         console.error(
           "Autofix sandbox result:",
@@ -102,7 +96,7 @@ export async function runPullRequestReview(
       },
     );
 
-    if (autofixEnabled && payload.autofix?.applied) {
+    if (payload.autofix?.applied) {
       try {
         const { commitSha } = await commitFilesToBranch(octokit, {
           owner: ctx.headOwner,
@@ -127,7 +121,7 @@ export async function runPullRequestReview(
         degradedLayers.push("autofix");
         console.error("Autofix commit failed:", autofixCommitError);
       }
-    } else if (autofixEnabled && payload.autofix?.error && (payload.autofix.packages.length ?? 0) > 0) {
+    } else if (payload.autofix?.error && (payload.autofix.packages.length ?? 0) > 0) {
       degradedLayers.push("autofix");
     }
 
@@ -139,7 +133,6 @@ export async function runPullRequestReview(
 
     let summaryBody = buildSummaryComment(reviewResult);
     summaryBody += formatAutofixStatusNote({
-      enabled: autofixEnabled,
       result: payload.autofix,
       commitSha: autofixCommitSha,
       commitError: autofixCommitError,
