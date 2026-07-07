@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   console.log("");
 
   const started = Date.now();
-  console.log("Creating sandbox + installing ripgrep…");
+  console.log("Creating sandbox…");
 
   const session = await createSandboxSession({
     cloneUrl: authCloneUrl,

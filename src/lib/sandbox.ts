@@ -53,24 +53,6 @@ async function runSandboxShell(
   };
 }
 
-async function installRipgrep(sandbox: SandboxCommandRunner, localBin: string): Promise<void> {
-  await runSandboxShell(
-    sandbox,
-    `
-set +e
-mkdir -p "${localBin}"
-TMP=$(mktemp -d)
-curl -sL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz | tar xz -C "$TMP"
-RG=$(find "$TMP" -type f -name rg | head -1)
-if [ -n "$RG" ]; then
-  cp "$RG" "${localBin}/rg"
-  chmod +x "${localBin}/rg"
-fi
-`,
-    false,
-  );
-}
-
 async function writeFileInSandbox(
   sandbox: SandboxCommandRunner,
   path: string,
@@ -124,13 +106,6 @@ export async function createSandboxSession(
     timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
 
-  const homeResult = await runSandboxShell(sandbox, 'printf "%s" "$HOME"', false);
-  const home = homeResult.stdout.trim() || "/tmp";
-  const localBin = `${home}/.local/bin`;
-  const toolPath = `${localBin}:/usr/bin:/bin`;
-
-  await installRipgrep(sandbox, localBin);
-
   const session: SandboxSession = {
     async readFile(path: string): Promise<SandboxToolResult> {
       try {
@@ -147,14 +122,19 @@ export async function createSandboxSession(
 
     async grep(pattern: string, path = ".", glob?: string): Promise<SandboxToolResult> {
       try {
-        const args = ["--no-heading", "--line-number", "-C", "2", pattern, path];
-        if (glob) args.splice(4, 0, "--glob", glob);
+        const args = ["-r", "-n", "-C", "2", "-I", pattern, path];
+        if (glob) args.splice(5, 0, "--include", glob);
         const result = await sandbox.runCommand({
-          cmd: "rg",
+          cmd: "grep",
           args,
-          env: { PATH: toolPath },
         });
         const content = await result.stdout();
+        if (result.exitCode === 1 && !content.trim()) {
+          return { content: "(no matches)" };
+        }
+        if (result.exitCode > 1) {
+          return { content: "", error: (await result.stderr()) || "grep failed" };
+        }
         return { content: content || "(no matches)" };
       } catch (err) {
         return { content: "", error: err instanceof Error ? err.message : "grep failed" };
