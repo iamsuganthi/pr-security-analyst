@@ -25,7 +25,7 @@ export interface CreateSandboxOptions {
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 8 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 type SandboxCommandRunner = {
   runCommand(params: {
@@ -110,6 +110,7 @@ export async function createSandboxSession(
     teamId,
     projectId,
     token,
+    persistent: false,
     source: {
       type: "git",
       url: options.cloneUrl,
@@ -119,7 +120,7 @@ export async function createSandboxSession(
       depth: 1,
     },
     runtime: "node24",
-    resources: { vcpus: 2 },
+    resources: { vcpus: 1 },
     timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
 
@@ -177,6 +178,11 @@ export async function createSandboxSession(
         await sandbox.stop();
       } catch {
         // Sandbox may already be stopped
+      }
+      try {
+        await sandbox.delete();
+      } catch {
+        // Sandbox may already be deleted
       }
     },
   };

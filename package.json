@@ -17,7 +17,7 @@
     "@octokit/auth-app": "^7.1.5",
     "@octokit/rest": "^21.1.1",
     "@vercel/functions": "^2.2.2",
-    "@vercel/sandbox": "^0.0.17",
+    "@vercel/sandbox": "^2.4.0",
     "ai": "^7.0.14",
     "next": "^15.3.4",
     "react": "^19.1.0",
