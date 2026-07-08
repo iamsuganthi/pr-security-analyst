@@ -14,6 +14,11 @@ GitHub App that reviews pull requests for security issues — OSV-backed depende
 - Posts a PR review, inline comments, and a SecureReview check run
 - Commits dependency version bumps when OSV has a fixed version
 
+## Roadmap improvements
+
+- **Introduce [Vercel Eve](https://eve.dev) for durability** — move the agent runtime and PR review orchestration (check runs, posting results) inside Eve's durable workflow boundary so reviews survive timeouts, crashes, and redeploys.
+- **Handle sandbox as part of Eve** — replace the hand-rolled `withSandbox()` lifecycle with Eve-managed sandboxes per session (clone, tool execution, and dependency autofix inside the same durable session).
+
 ## Local development
 
 ```bash
