@@ -14,9 +14,9 @@ import {
   sortFindingsBySeverity,
 } from "./types";
 
-const TRIAGE_MODEL = process.env.AI_TRIAGE_MODEL ?? "openai/gpt-4o-mini";
-const REVIEW_MODEL = process.env.AI_REVIEW_MODEL ?? "openai/gpt-4o";
-const FALLBACK_MODEL = process.env.AI_FALLBACK_MODEL ?? "anthropic/claude-3-5-haiku-latest";
+const TRIAGE_MODEL = process.env.AI_TRIAGE_MODEL ?? "openai/gpt-5.4-mini";
+const REVIEW_MODEL = process.env.AI_REVIEW_MODEL ?? "moonshotai/kimi-k2.6";
+const FALLBACK_MODEL = process.env.AI_FALLBACK_MODEL ?? "anthropic/claude-sonnet-4.6";
 
 export interface ReviewInput {
   diff: string;
