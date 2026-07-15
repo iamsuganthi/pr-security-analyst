@@ -1,17 +1,14 @@
 import crypto from "node:crypto";
-import { waitUntil } from "@vercel/functions";
 import { NextRequest, NextResponse } from "next/server";
+import { start } from "workflow/api";
 import {
-  createInstallationOctokit,
   isDuplicateDelivery,
   isReviewablePullRequestAction,
   parsePullRequestPayload,
-  clearRun,
-  registerRun,
-  runKey,
   verifyGitHubWebhookSignature,
 } from "@/lib/github";
-import { runPullRequestReview } from "@/lib/review";
+import type { PullRequestContext } from "@/lib/types";
+import { runPullRequestReview } from "@/workflows/review-workflow";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -56,10 +53,7 @@ export async function POST(request: NextRequest) {
   const headSha = prPayload.pull_request.head.sha;
   const baseSha = prPayload.pull_request.base.sha;
 
-  const key = runKey(owner, repo, pullNumber);
-  const abortController = registerRun(key);
-
-  const ctx = {
+  const ctx: PullRequestContext = {
     owner,
     repo,
     pullNumber,
@@ -72,18 +66,7 @@ export async function POST(request: NextRequest) {
     deliveryId,
   };
 
-  waitUntil(
-    (async () => {
-      try {
-        const octokit = createInstallationOctokit(installationId);
-        await runPullRequestReview(octokit, ctx, abortController.signal);
-      } catch (err) {
-        console.error("SecureReview failed:", err);
-      } finally {
-        clearRun(key);
-      }
-    })(),
-  );
+  const run = await start(runPullRequestReview, [ctx]);
 
-  return NextResponse.json({ ok: true, queued: true });
+  return NextResponse.json({ ok: true, queued: true, runId: run.runId });
 }

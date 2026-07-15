@@ -16,6 +16,11 @@
 /out/
 src/app/.well-known/
 
+# workflow sdk
+/.well-known/
+/.workflow-data/
+/.output/
+
 # production
 /build
 
@@ -43,3 +48,4 @@ evals/results/*
 evals/.tmp/
 .vercel
 PLAN.md
+/.swc

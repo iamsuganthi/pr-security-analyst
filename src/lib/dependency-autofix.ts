@@ -1,6 +1,6 @@
 import { Finding } from "./types";
 import { pickHighestVersion } from "./osv";
-import { SandboxSession } from "./sandbox";
+import type { SandboxSession } from "./sandbox";
 
 export interface PackageUpgrade {
   name: string;

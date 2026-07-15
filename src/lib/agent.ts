@@ -5,7 +5,7 @@ import {
   lookupCvesForChanges,
   validateCveIds,
 } from "./osv";
-import { SandboxSession } from "./sandbox";
+import type { SandboxSession } from "./sandbox";
 import {
   Finding,
   FindingSchema,
