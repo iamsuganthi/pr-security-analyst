@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractPackageChangesFromFiles,
+  normalizeVersionSpecifier,
   parsePackageJsonDiff,
 } from "../src/lib/osv";
 
@@ -32,6 +33,32 @@ describe("parsePackageJsonDiff", () => {
     expect(changes).toEqual([
       { name: "lodash", version: "4.17.4", ecosystem: "npm" },
     ]);
+  });
+
+  it("strips semver range prefixes so OSV is queried with an exact version", () => {
+    // Regression test: OSV.dev cannot parse a range specifier like "^4.18.0" as an
+    // exact version and matches broadly across the package's whole advisory history
+    // instead, which previously caused an already-fixed version to keep being flagged
+    // as vulnerable and re-"fixed" every review — an infinite commit loop.
+    const patch = `@@ -10,6 +10,7 @@
+   "dependencies": {
++    "lodash": "^4.18.0",
+     "express": "^4.18.0"
+   }`;
+
+    const changes = parsePackageJsonDiff(patch);
+    expect(changes).toEqual([
+      { name: "lodash", version: "4.18.0", ecosystem: "npm" },
+    ]);
+  });
+});
+
+describe("normalizeVersionSpecifier", () => {
+  it("strips caret, tilde, and comparison operators", () => {
+    expect(normalizeVersionSpecifier("^4.18.0")).toBe("4.18.0");
+    expect(normalizeVersionSpecifier("~4.18.0")).toBe("4.18.0");
+    expect(normalizeVersionSpecifier(">=4.18.0")).toBe("4.18.0");
+    expect(normalizeVersionSpecifier("4.18.0")).toBe("4.18.0");
   });
 });
 

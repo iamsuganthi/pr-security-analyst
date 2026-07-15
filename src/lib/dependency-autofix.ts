@@ -34,8 +34,12 @@ export function bumpPackageJson(
     let changed = false;
     for (const section of DEPENDENCY_SECTIONS) {
       const deps = pkg[section];
-      if (!deps?.[upgrade.name]) continue;
-      deps[upgrade.name] = upgrade.toVersion;
+      const current = deps?.[upgrade.name];
+      // Skip if already absent or already at (or past) the target version — otherwise
+      // this reports "applied" on every run even when nothing changes, which produces a
+      // no-op commit that still gets a new SHA and re-triggers pull_request.synchronize.
+      if (!current || current === upgrade.toVersion) continue;
+      deps![upgrade.name] = upgrade.toVersion;
       changed = true;
     }
     if (changed) applied.push(upgrade);
@@ -125,12 +129,18 @@ export async function applyDependencyAutofixInSandbox(
   }
 
   const installArgs = applied.map((u) => `${u.name}@${u.toVersion}`).join(" ");
+  // --save-exact is required: npm's default save-prefix is "^", so without it
+  // `npm install pkg@X --package-lock-only` rewrites package.json back to "^X",
+  // silently undoing the exact pin bumpPackageJson just wrote. That caret then gets
+  // picked up by the next review's OSV query (a range string, not an exact version),
+  // which OSV matches broadly against the package's entire advisory history — producing
+  // an identical "fix" forever and an infinite commit → synchronize → commit loop.
   const npmResult = await sandbox.runShell(
     `set -e
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cd "$ROOT"
 NPM=$(command -v npm || command -v npm.cmd || echo npm)
-$NPM install ${installArgs} --package-lock-only --ignore-scripts --no-audit --no-fund`,
+$NPM install ${installArgs} --save-exact --package-lock-only --ignore-scripts --no-audit --no-fund`,
   );
   if (npmResult.exitCode !== 0) {
     console.error("Autofix npm failed:", npmResult.stdout, npmResult.stderr);
@@ -142,25 +152,24 @@ $NPM install ${installArgs} --package-lock-only --ignore-scripts --no-audit --no
     };
   }
 
-  const [finalPkg, finalLock] = await Promise.all([
-    sandbox.readFile("package.json"),
-    sandbox.readFile("package-lock.json"),
-  ]);
-
-  if (finalPkg.error || finalLock.error) {
+  const finalLock = await sandbox.readFile("package-lock.json");
+  if (finalLock.error) {
     return {
       applied: false,
       packages: applied,
       files: [],
-      error: "Failed to read updated manifest files",
+      error: "Failed to read updated lockfile",
     };
   }
 
+  // Commit our own exact-pinned package.json (updatedPkg) rather than re-reading it
+  // from the sandbox — npm's own save behavior is not trusted to preserve the exact
+  // version even with --save-exact across every npm version/config combination.
   return {
     applied: true,
     packages: applied,
     files: [
-      { path: "package.json", content: finalPkg.content },
+      { path: "package.json", content: updatedPkg },
       { path: "package-lock.json", content: finalLock.content },
     ],
   };

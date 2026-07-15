@@ -90,6 +90,27 @@ describe("bumpPackageJson", () => {
     expect(parsed.dependencies.express).toBe("^4.18.0");
     expect(applied).toHaveLength(1);
   });
+
+  it("does not report a package as applied when already at the target version", () => {
+    // Regression test: previously this unconditionally set `changed = true` whenever
+    // the package existed, so a repeat run against an already-fixed package.json still
+    // reported `applied`, triggering a no-op commit that re-fired pull_request.synchronize
+    // and caused an infinite review loop.
+    const pkg = JSON.stringify(
+      {
+        name: "demo",
+        dependencies: { lodash: "4.17.21", express: "^4.18.0" },
+      },
+      null,
+      2,
+    );
+
+    const { applied } = bumpPackageJson(pkg, [
+      { name: "lodash", toVersion: "4.17.21", cveIds: ["GHSA-x"], fromVersion: "4.17.4" },
+    ]);
+
+    expect(applied).toHaveLength(0);
+  });
 });
 
 describe("formatAutofixStatusNote", () => {

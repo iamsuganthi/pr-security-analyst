@@ -15,6 +15,7 @@ export function verifyGitHubWebhookSignature(
 export interface PullRequestPayload {
   action: string;
   installation?: { id: number };
+  sender?: { login: string; type: string };
   pull_request: {
     number: number;
     head: {
@@ -40,6 +41,17 @@ export function parsePullRequestPayload(body: unknown): PullRequestPayload | nul
 
 export function isReviewablePullRequestAction(action: string): boolean {
   return action === "opened" || action === "synchronize" || action === "reopened";
+}
+
+/**
+ * Guards against self-triggered review loops: our autofix commits push to the PR's
+ * head branch via the installation token, which GitHub reports back as a
+ * `pull_request.synchronize` event with a bot `sender`. Without this check, a bot-authored
+ * push (ours or another bot's) re-triggers a full review, which can push another commit,
+ * ad infinitum. Human-authored synchronize events (and opened/reopened) are unaffected.
+ */
+export function isSelfTriggeredSynchronize(payload: PullRequestPayload): boolean {
+  return payload.action === "synchronize" && payload.sender?.type === "Bot";
 }
 
 const processedDeliveries = new Map<string, number>();

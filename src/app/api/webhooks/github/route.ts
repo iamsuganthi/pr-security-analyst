@@ -4,6 +4,7 @@ import { start } from "workflow/api";
 import {
   isDuplicateDelivery,
   isReviewablePullRequestAction,
+  isSelfTriggeredSynchronize,
   parsePullRequestPayload,
   verifyGitHubWebhookSignature,
 } from "@/lib/github";
@@ -40,6 +41,10 @@ export async function POST(request: NextRequest) {
   const prPayload = parsePullRequestPayload(body);
   if (!prPayload || !isReviewablePullRequestAction(prPayload.action)) {
     return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  if (isSelfTriggeredSynchronize(prPayload)) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "bot-triggered synchronize" });
   }
 
   const installationId = prPayload.installation?.id;

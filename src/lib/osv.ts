@@ -50,6 +50,17 @@ function parseSemver(version: string): [number, number, number] {
   return [Number(major) || 0, Number(minor) || 0, Number(patch) || 0];
 }
 
+/**
+ * Strips semver range operators (^, ~, >=, <=, >, <, =) and whitespace from a raw
+ * package.json version specifier. OSV's /v1/query expects an exact version — querying
+ * with an unparsed range string (e.g. "^4.18.0") makes OSV fail to match it against any
+ * specific range and fall back to matching broadly across the package's entire advisory
+ * history, producing false-positive findings for versions that are actually safe.
+ */
+export function normalizeVersionSpecifier(version: string): string {
+  return version.trim().replace(/^[\^~><=\s]+/, "");
+}
+
 export function parsePackageJsonDiff(patch: string): PackageChange[] {
   const changes: PackageChange[] = [];
   let currentSection: string | null = null;
@@ -80,7 +91,11 @@ export function parsePackageJsonDiff(patch: string): PackageChange[] {
 
     const depMatch = content.match(/^\s*"([^"]+)":\s*"([^"]+)"/);
     if (depMatch) {
-      changes.push({ name: depMatch[1]!, version: depMatch[2]!, ecosystem: "npm" });
+      changes.push({
+        name: depMatch[1]!,
+        version: normalizeVersionSpecifier(depMatch[2]!),
+        ecosystem: "npm",
+      });
     }
   }
 
@@ -89,7 +104,11 @@ export function parsePackageJsonDiff(patch: string): PackageChange[] {
       if (!line.startsWith("+") || line.startsWith("+++")) continue;
       const depMatch = line.match(/^\+\s*"([^"]+)":\s*"([^"]+)"/);
       if (depMatch) {
-        changes.push({ name: depMatch[1]!, version: depMatch[2]!, ecosystem: "npm" });
+        changes.push({
+          name: depMatch[1]!,
+          version: normalizeVersionSpecifier(depMatch[2]!),
+          ecosystem: "npm",
+        });
       }
     }
   }
